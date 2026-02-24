@@ -1,7 +1,7 @@
  # Weekly Market Report
 
   Weekly email report:
-  - KOSPI top 10 by market cap
+  - KOSPI top 20 by market cap
   - S&P 500 top 20 by market cap
   - Weekly price change (%)
 

@@ -17,20 +17,38 @@ CACHE_DIR = Path(__file__).resolve().parent / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 SP500_CACHE_PATH = CACHE_DIR / "sp500_top20.json"
 
+def _clean_env(value, default=""):
+    v = value if value is not None else default
+    # Normalize common .env formatting mistakes (quotes/whitespace)
+    return str(v).strip().strip('"').strip("'").strip()
+
 def load_env():
-    load_dotenv()
+    env_path = Path(__file__).resolve().parent / ".env"
+    load_dotenv(dotenv_path=env_path, override=True)
+    smtp_host = _clean_env(os.getenv("SMTP_HOST", ""))
+    smtp_user = _clean_env(os.getenv("SMTP_USER", ""))
+    smtp_pass = _clean_env(os.getenv("SMTP_PASS", ""))
+    email_to = _clean_env(os.getenv("EMAIL_TO", ""))
+    email_from = _clean_env(os.getenv("EMAIL_FROM"), default=smtp_user) or smtp_user
+    tz = _clean_env(os.getenv("REPORT_TIMEZONE", "Asia/Seoul"), default="Asia/Seoul")
     cfg = {
-        "smtp_host": os.getenv("SMTP_HOST", ""),
+        "smtp_host": smtp_host,
         "smtp_port": int(os.getenv("SMTP_PORT", "587")),
-        "smtp_user": os.getenv("SMTP_USER", ""),
-        "smtp_pass": os.getenv("SMTP_PASS", ""),
-        "email_to": os.getenv("EMAIL_TO", ""),
-        "email_from": os.getenv("EMAIL_FROM") or os.getenv("SMTP_USER", ""),
-        "tz": os.getenv("REPORT_TIMEZONE", "Asia/Seoul"),
+        "smtp_user": smtp_user,
+        "smtp_pass": smtp_pass,
+        "email_to": email_to,
+        "email_from": email_from,
+        "tz": tz,
     }
     missing = [k for k, v in cfg.items() if k in ["smtp_host", "smtp_user", "smtp_pass", "email_to"] and not v]
     if missing:
         raise RuntimeError("Missing env: " + ", ".join(missing))
+    if "gmail.com" in cfg["smtp_host"].lower():
+        pw_len = len(cfg["smtp_pass"])
+        if pw_len != 16:
+            raise RuntimeError(
+                f"SMTP_PASS length is {pw_len}. Gmail SMTP requires a 16-character App Password."
+            )
     return cfg
 def get_sp500_tickers():
     url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
@@ -73,10 +91,10 @@ def get_sp500_top20():
     except Exception:
         pass
     return top20
-def get_sp500_weekly_change(top20):
+def get_sp500_weekly_change(top20, window=5):
     data = yf.download(
         tickers=" ".join(top20),
-        period="10d",
+        period="1mo",
         interval="1d",
         group_by="ticker",
         auto_adjust=False,
@@ -87,40 +105,49 @@ def get_sp500_weekly_change(top20):
     for t in top20:
         try:
             series = data[t]["Close"].dropna()
-            if len(series) < 2:
+            if len(series) < window:
                 continue
-            start = series.iloc[0]
-            end = series.iloc[-1]
+            week = series.tail(window)
+            start = week.iloc[0]
+            end = week.iloc[-1]
             change_pct = (end - start) / start * 100.0
-            rows.append((t, float(start), float(end), float(change_pct)))
+            start_date = week.index[0].strftime("%Y-%m-%d")
+            end_date = week.index[-1].strftime("%Y-%m-%d")
+            rows.append((t, start_date, end_date, float(start), float(end), float(change_pct)))
         except Exception:
             continue
-    df = pd.DataFrame(rows, columns=["Ticker", "Start", "End", "ChangePct"])
+    df = pd.DataFrame(rows, columns=["Ticker", "StartDate", "EndDate", "Start", "End", "ChangePct"])
     df["ChangePct"] = df["ChangePct"].round(2)
     return df
-def get_kospi_top10_and_change():
+def get_kospi_top10_and_change(window=5):
     today = dt.datetime.now().strftime("%Y%m%d")
-    # nearest business days
+    # latest business day for top-10 market cap selection
     end_date = stock.get_nearest_business_day_in_a_week(today)
-    start_date = stock.get_nearest_business_day_in_a_week(today, prev=True)
-    # market caps for top 10
+    lookup_start = (dt.datetime.now() - dt.timedelta(days=45)).strftime("%Y%m%d")
+    # market caps for top 20
     caps = stock.get_market_cap_by_ticker(end_date, market="KOSPI")
-    caps = caps.sort_values("시가총액", ascending=False).head(10)
+    caps = caps.sort_values("시가총액", ascending=False).head(20)
     tickers = caps.index.tolist()
     rows = []
     for t in tickers:
         try:
-            ohlcv = stock.get_market_ohlcv_by_date(start_date, end_date, t)
+            ohlcv = stock.get_market_ohlcv_by_date(lookup_start, end_date, t)
             if ohlcv.empty:
                 continue
-            start = float(ohlcv["종가"].iloc[0])
-            end = float(ohlcv["종가"].iloc[-1])
+            close = ohlcv["종가"].dropna()
+            if len(close) < window:
+                continue
+            week = close.tail(window)
+            start = float(week.iloc[0])
+            end = float(week.iloc[-1])
             change_pct = (end - start) / start * 100.0
             name = stock.get_market_ticker_name(t)
-            rows.append((name, t, start, end, change_pct))
+            start_date = pd.to_datetime(week.index[0]).strftime("%Y-%m-%d")
+            end_date_row = pd.to_datetime(week.index[-1]).strftime("%Y-%m-%d")
+            rows.append((name, t, start_date, end_date_row, start, end, change_pct))
         except Exception:
             continue
-    df = pd.DataFrame(rows, columns=["Name", "Ticker", "Start", "End", "ChangePct"])
+    df = pd.DataFrame(rows, columns=["Name", "Ticker", "StartDate", "EndDate", "Start", "End", "ChangePct"])
     df["ChangePct"] = df["ChangePct"].round(2)
     return df
 def build_report():
@@ -135,14 +162,14 @@ def build_report():
     <html>
     <body>
     <h2>Weekly Market Report ({now})</h2>
-    <h3>KOSPI Top 10 by Market Cap</h3>
+    <h3>KOSPI Top 20 by Market Cap</h3>
     {kospi_html}
     <h3>S&P 500 Top 20 by Market Cap</h3>
     {sp_html}
     </body>
     </html>
     """
-    text = "Weekly Market Report\n\nKOSPI Top 10:\n"
+    text = "Weekly Market Report\n\nKOSPI Top 20:\n"
     text += kospi_df.to_string(index=False)
     text += "\n\nS&P 500 Top 20:\n"
     text += sp_df.to_string(index=False)
@@ -155,7 +182,12 @@ def send_email(cfg, subject, text, html):
     msg.attach(MIMEText(text, "plain"))
     msg.attach(MIMEText(html, "html"))
     with smtplib.SMTP(cfg["smtp_host"], cfg["smtp_port"]) as server:
+        server.ehlo()
         server.starttls()
+        server.ehlo()
+        server.login(cfg["smtp_user"], cfg["smtp_pass"])
+        recipients = [addr.strip() for addr in cfg["email_to"].split(",") if addr.strip()]
+        server.send_message(msg, from_addr=cfg["email_from"], to_addrs=recipients)
 def main():
     cfg = load_env()
     subject, text, html = build_report()
