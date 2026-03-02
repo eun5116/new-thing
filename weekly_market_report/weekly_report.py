@@ -16,6 +16,16 @@ import json
 CACHE_DIR = Path(__file__).resolve().parent / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 SP500_CACHE_PATH = CACHE_DIR / "sp500_top20.json"
+SP500_COLUMNS = ["Ticker", "StartDate", "EndDate", "Start", "End", "ChangePct"]
+KOSPI_COLUMNS = ["Name", "Ticker", "StartDate", "EndDate", "Start", "End", "ChangePct"]
+
+
+def _finalize_report_df(df):
+    if "ChangePct" in df.columns:
+        df["ChangePct"] = pd.to_numeric(df["ChangePct"], errors="coerce")
+        if not df.empty:
+            df["ChangePct"] = df["ChangePct"].round(2)
+    return df
 
 def _clean_env(value, default=""):
     v = value if value is not None else default
@@ -92,15 +102,20 @@ def get_sp500_top20():
         pass
     return top20
 def get_sp500_weekly_change(top20, window=5):
-    data = yf.download(
-        tickers=" ".join(top20),
-        period="1mo",
-        interval="1d",
-        group_by="ticker",
-        auto_adjust=False,
-        threads=True,
-        progress=False,
-    )
+    if not top20:
+        return pd.DataFrame(columns=SP500_COLUMNS)
+    try:
+        data = yf.download(
+            tickers=" ".join(top20),
+            period="1mo",
+            interval="1d",
+            group_by="ticker",
+            auto_adjust=False,
+            threads=True,
+            progress=False,
+        )
+    except Exception:
+        return pd.DataFrame(columns=SP500_COLUMNS)
     rows = []
     for t in top20:
         try:
@@ -116,16 +131,23 @@ def get_sp500_weekly_change(top20, window=5):
             rows.append((t, start_date, end_date, float(start), float(end), float(change_pct)))
         except Exception:
             continue
-    df = pd.DataFrame(rows, columns=["Ticker", "StartDate", "EndDate", "Start", "End", "ChangePct"])
-    df["ChangePct"] = df["ChangePct"].round(2)
-    return df
+    df = pd.DataFrame(rows, columns=SP500_COLUMNS)
+    return _finalize_report_df(df)
 def get_kospi_top10_and_change(window=5):
     today = dt.datetime.now().strftime("%Y%m%d")
-    # latest business day for top-10 market cap selection
-    end_date = stock.get_nearest_business_day_in_a_week(today)
+    try:
+        # latest business day for top-10 market cap selection
+        end_date = stock.get_nearest_business_day_in_a_week(today)
+    except Exception:
+        return pd.DataFrame(columns=KOSPI_COLUMNS)
     lookup_start = (dt.datetime.now() - dt.timedelta(days=45)).strftime("%Y%m%d")
-    # market caps for top 20
-    caps = stock.get_market_cap_by_ticker(end_date, market="KOSPI")
+    try:
+        # market caps for top 20
+        caps = stock.get_market_cap_by_ticker(end_date, market="KOSPI")
+    except Exception:
+        return pd.DataFrame(columns=KOSPI_COLUMNS)
+    if caps is None or caps.empty:
+        return pd.DataFrame(columns=KOSPI_COLUMNS)
     caps = caps.sort_values("시가총액", ascending=False).head(20)
     tickers = caps.index.tolist()
     rows = []
@@ -147,15 +169,25 @@ def get_kospi_top10_and_change(window=5):
             rows.append((name, t, start_date, end_date_row, start, end, change_pct))
         except Exception:
             continue
-    df = pd.DataFrame(rows, columns=["Name", "Ticker", "StartDate", "EndDate", "Start", "End", "ChangePct"])
-    df["ChangePct"] = df["ChangePct"].round(2)
-    return df
+    df = pd.DataFrame(rows, columns=KOSPI_COLUMNS)
+    return _finalize_report_df(df)
 def build_report():
     kospi_df = get_kospi_top10_and_change()
     sp_top20 = get_sp500_top20()
     sp_df = get_sp500_weekly_change(sp_top20)
     now = dt.datetime.now().strftime("%Y-%m-%d")
     subject = f"Weekly Market Report - {now}"
+    kospi_notice_html = ""
+    kospi_notice_text = ""
+    if kospi_df.empty:
+        kospi_notice_html = (
+            "<p><strong>KOSPI data is unavailable.</strong> "
+            "Source/network issue (for example DNS/connection failure to KRX) may have occurred.</p>"
+        )
+        kospi_notice_text = (
+            "[KOSPI] Data unavailable. Source/network issue "
+            "(for example DNS/connection failure to KRX) may have occurred.\n"
+        )
     kospi_html = kospi_df.to_html(index=False)
     sp_html = sp_df.to_html(index=False)
     html = f"""
@@ -163,6 +195,7 @@ def build_report():
     <body>
     <h2>Weekly Market Report ({now})</h2>
     <h3>KOSPI Top 20 by Market Cap</h3>
+    {kospi_notice_html}
     {kospi_html}
     <h3>S&P 500 Top 20 by Market Cap</h3>
     {sp_html}
@@ -170,6 +203,7 @@ def build_report():
     </html>
     """
     text = "Weekly Market Report\n\nKOSPI Top 20:\n"
+    text += kospi_notice_text
     text += kospi_df.to_string(index=False)
     text += "\n\nS&P 500 Top 20:\n"
     text += sp_df.to_string(index=False)
