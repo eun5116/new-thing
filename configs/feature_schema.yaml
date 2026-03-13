@@ -1,0 +1,51 @@
+version: 1
+price_basis: adjusted_close
+timezone: America/New_York
+calendar: XNYS
+features:
+  - name: log_return_1
+    source: close
+    unit: ratio
+    fill: none
+    normalization: zscore_train_only
+    lookback: 1
+  - name: log_return_5
+    source: close
+    unit: ratio
+    fill: none
+    normalization: zscore_train_only
+    lookback: 5
+  - name: rolling_vol_20
+    source: close
+    unit: ratio
+    fill: none
+    normalization: zscore_train_only
+    lookback: 20
+  - name: parkinson_vol_20
+    source: high_low
+    unit: ratio
+    fill: none
+    normalization: zscore_train_only
+    lookback: 20
+  - name: volume_zscore_20
+    source: volume
+    unit: ratio
+    fill: median_train_only
+    normalization: none
+    lookback: 20
+  - name: range_close_ratio_5
+    source: high_low_close
+    unit: ratio
+    fill: none
+    normalization: zscore_train_only
+    lookback: 5
+  - name: day_of_week
+    source: calendar
+    unit: category_index
+    fill: none
+    normalization: none
+  - name: month_of_year
+    source: calendar
+    unit: category_index
+    fill: none
+    normalization: none

@@ -1,5 +1,6 @@
- python-dotenv
- pandas
- requests
- yfinance
- pykrx
+python-dotenv
+pandas
+requests
+yfinance
+pykrx
+lxml

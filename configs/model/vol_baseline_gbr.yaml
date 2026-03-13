@@ -1,0 +1,25 @@
+name: vol_baseline_gbr_v1
+task: volatility_regression
+model_family: hist_gradient_boosting
+input_window: 60
+input_dtype: float32
+output_dim: 1
+features:
+  source: configs/feature_schema.yaml
+loss:
+  name: squared_error
+training:
+  max_depth: 6
+  learning_rate: 0.05
+  max_iter: 300
+  min_samples_leaf: 20
+  l2_regularization: 0.001
+evaluation:
+  primary_metric: rmse
+  secondary_metrics:
+    - mae
+    - spearman
+export:
+  format: onnx
+  opset: 17
+  dynamic_axes: false

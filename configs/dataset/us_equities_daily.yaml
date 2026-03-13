@@ -1,0 +1,23 @@
+name: us_equities_daily_v1
+provider: yfinance
+universe:
+  - AAPL
+  - MSFT
+  - NVDA
+interval: 1d
+timezone: America/New_York
+calendar: XNYS
+price_basis: adjusted_close
+train_start: 2020-01-01
+train_end: 2024-12-31
+val_start: 2025-01-01
+val_end: 2025-06-30
+test_start: 2025-07-01
+test_end: 2025-12-31
+label_name: next_day_realized_vol
+horizon_bars: 1
+split_policy: date_split
+shuffle: false
+seed: 42
+scaler_fit_scope: train_only
+threshold_fit_scope: train_only

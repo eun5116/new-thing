@@ -1,0 +1,15 @@
+name: kospi_alerts_v1
+provider: yfinance
+market_scope: kospi
+interval: 1d
+timezone: Asia/Seoul
+calendar: XKRX
+price_basis: adjusted_close
+alert_name: two_week_momentum_watch
+window_trading_days: 10
+min_total_return: 0.10
+trend_policy: tolerant
+min_up_days: 8
+max_consecutive_down_days: 2
+shuffle: false
+seed: 42
