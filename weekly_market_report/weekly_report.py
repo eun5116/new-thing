@@ -1,4 +1,5 @@
 # 실행 코드: python weekly_report.py
+import argparse
 import os
 import sys
 import smtplib
@@ -19,6 +20,10 @@ import json
 
 CACHE_DIR = Path(__file__).resolve().parent / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+HISTORY_DIR = Path(__file__).resolve().parent / "history"
+HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 ALERT_CONFIG_DIR = Path(__file__).resolve().parents[1] / "configs" / "dataset"
 ALERT_CONFIG_PATHS = [
     ALERT_CONFIG_DIR / "us_equities_alerts.yaml",
@@ -26,6 +31,7 @@ ALERT_CONFIG_PATHS = [
 ]
 SP500_CACHE_PATH = CACHE_DIR / "sp500_top20.json"
 KOSPI_CACHE_PATH = CACHE_DIR / "kospi_top20.json"
+SP500_REPORT_CACHE_PATH = CACHE_DIR / "sp500_weekly_rows.json"
 SP500_COLUMNS = ["Ticker", "StartDate", "EndDate", "Start", "End", "ChangePct"]
 KOSPI_COLUMNS = ["Name", "Ticker", "StartDate", "EndDate", "Start", "End", "ChangePct"]
 ALERT_COLUMNS = [
@@ -62,6 +68,7 @@ DEFAULT_KOSPI20 = [
     ("LG전자", "066570"),
     ("SK텔레콤", "017670"),
 ]
+OFFLINE_MODE = False
 
 
 def _finalize_report_df(df):
@@ -74,6 +81,80 @@ def _finalize_report_df(df):
         if not df.empty:
             df["total_return"] = df["total_return"].round(4)
     return df
+
+
+def _to_html_table(df, empty_message):
+    if df is None or df.empty:
+        return f"<p>{empty_message}</p>"
+    return df.to_html(index=False)
+
+
+def _to_text_table(df, empty_message):
+    if df is None or df.empty:
+        return empty_message
+    return df.to_string(index=False)
+
+
+def _safe_config_name(config_path):
+    try:
+        cfg = load_alert_config(config_path)
+        return str(cfg.get("name", config_path.stem))
+    except Exception:
+        return config_path.stem
+
+
+def _build_market_snapshot(df, label, name_col):
+    if df is None or df.empty or "ChangePct" not in df.columns:
+        return [f"{label}: data unavailable"]
+    clean = df.dropna(subset=["ChangePct"]).copy()
+    if clean.empty:
+        return [f"{label}: no valid weekly change rows"]
+    top_row = clean.sort_values("ChangePct", ascending=False).iloc[0]
+    bottom_row = clean.sort_values("ChangePct", ascending=True).iloc[0]
+    top_name = str(top_row.get(name_col, "N/A"))
+    bottom_name = str(bottom_row.get(name_col, "N/A"))
+    return [
+        f"{label}: {len(clean)} rows, strongest {top_name} ({top_row['ChangePct']:.2f}%), weakest {bottom_name} ({bottom_row['ChangePct']:.2f}%)"
+    ]
+
+
+def _build_alert_snapshot(alert_results, alert_statuses):
+    lines = []
+    status_map = {config_path.name: status for config_path, status in alert_statuses}
+    for config_path, alerts_df in alert_results:
+        section_title = _safe_config_name(config_path)
+        triggered_count = 0
+        top_symbol = ""
+        top_return = None
+        if alerts_df is not None and not alerts_df.empty and "triggered" in alerts_df.columns:
+            triggered = alerts_df[alerts_df["triggered"]].copy()
+            triggered_count = len(triggered)
+            if not triggered.empty and "total_return" in triggered.columns:
+                top_row = triggered.sort_values("total_return", ascending=False).iloc[0]
+                top_symbol = str(top_row.get("symbol", "")) or str(top_row.get("name", ""))
+                top_return = top_row.get("total_return")
+        line = f"{section_title}: {triggered_count} triggered"
+        if pd.notna(top_return):
+            line += f", top {top_symbol} ({float(top_return) * 100:.2f}%)"
+        status = status_map.get(config_path.name, "")
+        if status:
+            line += f" [{status}]"
+        lines.append(line)
+    return lines or ["Momentum alerts: unavailable"]
+
+
+def _build_summary_sections(kospi_df, kospi_status, sp_df, alert_results, alert_statuses):
+    summary_lines = []
+    summary_lines.extend(_build_market_snapshot(kospi_df, "KOSPI", "Name"))
+    if kospi_status:
+        summary_lines.append(f"KOSPI status: {kospi_status}")
+    summary_lines.extend(_build_market_snapshot(sp_df, "S&P 500", "Ticker"))
+    summary_lines.extend(_build_alert_snapshot(alert_results, alert_statuses))
+    summary_html = "".join(f"<li>{line}</li>" for line in summary_lines)
+    return (
+        "<h3>Weekly Summary</h3>\n<ul>" + summary_html + "</ul>",
+        "Weekly Summary:\n" + "\n".join(f"- {line}" for line in summary_lines),
+    )
 
 
 def _parse_simple_yaml_scalar(raw):
@@ -146,6 +227,15 @@ def _safe_json_load(path):
     except Exception:
         return None
 
+
+def set_offline_mode(enabled):
+    global OFFLINE_MODE
+    OFFLINE_MODE = bool(enabled)
+
+
+def _is_offline_mode():
+    return OFFLINE_MODE
+
 def _retry_pykrx(callable_fn, tries=3, delay=1.0):
     last_error = None
     for attempt in range(tries):
@@ -157,7 +247,157 @@ def _retry_pykrx(callable_fn, tries=3, delay=1.0):
                 time.sleep(delay)
     return None, last_error
 
+
+def _slugify_filename(value):
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value)).strip("._")
+    return slug or "weekly_market_report"
+
+
+def _timestamp_now():
+    return dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+def save_report_artifacts(subject, text, html, output_dir=OUTPUT_DIR, metadata=None):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    base_name = f"{_timestamp_now()}_{_slugify_filename(subject)}"
+    text_path = output_dir / f"{base_name}.txt"
+    html_path = output_dir / f"{base_name}.html"
+    meta_path = output_dir / f"{base_name}.json"
+    text_path.write_text(text, encoding="utf-8")
+    html_path.write_text(html, encoding="utf-8")
+    payload = {
+        "saved_at": dt.datetime.now().isoformat(),
+        "subject": subject,
+        "text_path": str(text_path),
+        "html_path": str(html_path),
+    }
+    if metadata:
+        payload.update(metadata)
+    meta_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"text": text_path, "html": html_path, "meta": meta_path}
+
+
+def _append_history_rows(path, rows, columns):
+    new_df = pd.DataFrame(rows, columns=columns)
+    if path.exists() and not new_df.empty:
+        existing_df = pd.read_csv(path)
+        combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+    elif path.exists():
+        combined_df = pd.read_csv(path)
+    else:
+        combined_df = new_df
+    combined_df.to_csv(path, index=False)
+
+
+def _normalize_sp500_symbol(symbol):
+    return str(symbol).strip().upper().replace(".", "-")
+
+
+def save_market_history(report_date, kospi_df, sp_df, alert_results, history_dir=HISTORY_DIR):
+    history_dir.mkdir(parents=True, exist_ok=True)
+    captured_at = dt.datetime.now().isoformat()
+    market_columns = [
+        "captured_at",
+        "report_date",
+        "market",
+        "symbol",
+        "name",
+        "start_date",
+        "end_date",
+        "start_price",
+        "end_price",
+        "change_pct",
+    ]
+    alert_columns = [
+        "captured_at",
+        "report_date",
+        "section",
+        "market",
+        "symbol",
+        "name",
+        "alert_name",
+        "as_of_date",
+        "window_trading_days",
+        "total_return",
+        "up_days",
+        "max_consecutive_down_days",
+        "triggered",
+    ]
+
+    kospi_rows = []
+    if kospi_df is not None and not kospi_df.empty:
+        for row in kospi_df.to_dict(orient="records"):
+            kospi_rows.append(
+                {
+                    "captured_at": captured_at,
+                    "report_date": report_date,
+                    "market": "KOSPI",
+                    "symbol": row.get("Ticker", ""),
+                    "name": row.get("Name", ""),
+                    "start_date": row.get("StartDate", ""),
+                    "end_date": row.get("EndDate", ""),
+                    "start_price": row.get("Start", ""),
+                    "end_price": row.get("End", ""),
+                    "change_pct": row.get("ChangePct", ""),
+                }
+            )
+
+    sp_rows = []
+    if sp_df is not None and not sp_df.empty:
+        for row in sp_df.to_dict(orient="records"):
+            sp_rows.append(
+                {
+                    "captured_at": captured_at,
+                    "report_date": report_date,
+                    "market": "SP500",
+                    "symbol": row.get("Ticker", ""),
+                    "name": row.get("Ticker", ""),
+                    "start_date": row.get("StartDate", ""),
+                    "end_date": row.get("EndDate", ""),
+                    "start_price": row.get("Start", ""),
+                    "end_price": row.get("End", ""),
+                    "change_pct": row.get("ChangePct", ""),
+                }
+            )
+
+    alert_rows = []
+    for config_path, alerts_df in alert_results:
+        section_name = _safe_config_name(config_path)
+        if alerts_df is None or alerts_df.empty:
+            continue
+        for row in alerts_df.to_dict(orient="records"):
+            alert_rows.append(
+                {
+                    "captured_at": captured_at,
+                    "report_date": report_date,
+                    "section": section_name,
+                    "market": row.get("market", ""),
+                    "symbol": row.get("symbol", ""),
+                    "name": row.get("name", ""),
+                    "alert_name": row.get("alert_name", ""),
+                    "as_of_date": row.get("as_of_date", ""),
+                    "window_trading_days": row.get("window_trading_days", ""),
+                    "total_return": row.get("total_return", ""),
+                    "up_days": row.get("up_days", ""),
+                    "max_consecutive_down_days": row.get("max_consecutive_down_days", ""),
+                    "triggered": row.get("triggered", ""),
+                }
+            )
+
+    _append_history_rows(history_dir / "kospi_top20_history.csv", kospi_rows, market_columns)
+    _append_history_rows(history_dir / "sp500_top20_history.csv", sp_rows, market_columns)
+    _append_history_rows(history_dir / "momentum_alert_history.csv", alert_rows, alert_columns)
+
+    return {
+        "kospi": history_dir / "kospi_top20_history.csv",
+        "sp500": history_dir / "sp500_top20_history.csv",
+        "alerts": history_dir / "momentum_alert_history.csv",
+    }
+
+
 def _find_latest_kospi_caps(max_lookback_days=14):
+    if _is_offline_mode():
+        return None, None, RuntimeError("Offline mode enabled; skipping live KOSPI market cap fetch.")
     today = dt.datetime.now().date()
     last_error = None
     for offset in range(max_lookback_days + 1):
@@ -184,6 +424,34 @@ def _load_kospi_cache_df():
     df = pd.DataFrame(rows, columns=KOSPI_COLUMNS)
     return _finalize_report_df(df), note
 
+
+def _save_sp500_report_cache_df(df):
+    _safe_json_dump(
+        SP500_REPORT_CACHE_PATH,
+        {
+            "saved_at": dt.datetime.now().isoformat(),
+            "rows": df.to_dict(orient="records"),
+            "note": "Cached S&P 500 weekly rows.",
+        },
+    )
+
+
+def _load_sp500_report_cache_df():
+    cached = _safe_json_load(SP500_REPORT_CACHE_PATH)
+    if not cached:
+        return pd.DataFrame(columns=SP500_COLUMNS), ""
+    rows = cached.get("rows", [])
+    note = cached.get("note", "")
+    df = pd.DataFrame(rows, columns=SP500_COLUMNS)
+    return _finalize_report_df(df), note
+
+
+def _get_cached_kospi_symbols():
+    cached_df, _ = _load_kospi_cache_df()
+    if cached_df.empty or "Ticker" not in cached_df.columns:
+        return []
+    return [str(symbol).strip() for symbol in cached_df["Ticker"].dropna().tolist() if str(symbol).strip()]
+
 def _get_df_latest_end_date(df, default=""):
     if df is None or df.empty or "EndDate" not in df.columns:
         return default
@@ -204,6 +472,8 @@ def _save_kospi_cache_df(df, end_date):
     )
 
 def _fetch_naver_kospi_top20():
+    if _is_offline_mode():
+        raise RuntimeError("Offline mode enabled; skipping live Naver fetch.")
     headers = {"User-Agent": "Mozilla/5.0"}
     found = []
     seen = set()
@@ -241,7 +511,10 @@ def _extract_symbol_close_series(data, symbol):
     if isinstance(data.columns, pd.MultiIndex):
         if symbol not in data.columns.get_level_values(0):
             return pd.Series(dtype=float)
-        return data[symbol]["Close"].dropna()
+        symbol_frame = data[symbol]
+        if isinstance(symbol_frame, pd.DataFrame) and "Close" in symbol_frame.columns:
+            return symbol_frame["Close"].dropna()
+        return pd.Series(dtype=float)
     return _extract_close_series(data)
 
 
@@ -280,6 +553,8 @@ def _resolve_alert_universe(config):
         symbols = [str(symbol).strip().upper() for symbol in get_sp500_tickers() if str(symbol).strip()]
         return symbols, {}
     if market_scope == "kospi":
+        if _is_offline_mode():
+            return _get_cached_kospi_symbols(), {}
         end_date, _ = _get_latest_kospi_date()
         symbols = stock.get_market_ticker_list(date=end_date, market="KOSPI")
         return [str(symbol).strip() for symbol in symbols if str(symbol).strip()], {}
@@ -287,6 +562,8 @@ def _resolve_alert_universe(config):
 
 
 def _download_yfinance_close_map(symbols, interval, auto_adjust, suffix="", chunk_size=100):
+    if _is_offline_mode():
+        return {}
     close_map = {}
     for chunk in _chunked(symbols, chunk_size):
         actual_symbols = [f"{symbol}{suffix}" for symbol in chunk]
@@ -396,7 +673,7 @@ def get_two_week_momentum_alerts(config_path):
     auto_adjust = str(cfg["price_basis"]).lower() == "adjusted_close"
     if market_scope == "kospi":
         close_map = _download_yfinance_close_map(symbols, str(cfg["interval"]), auto_adjust, suffix=".KS", chunk_size=50)
-        metadata = _lookup_kospi_names(symbols)
+        metadata = {symbol: symbol for symbol in symbols} if _is_offline_mode() else _lookup_kospi_names(symbols)
     else:
         close_map = _download_yfinance_close_map(symbols, str(cfg["interval"]), auto_adjust, chunk_size=100)
 
@@ -535,26 +812,33 @@ def load_env():
             )
     return cfg
 def get_sp500_tickers():
+    if _is_offline_mode():
+        cached = _safe_json_load(SP500_CACHE_PATH) or {}
+        return cached.get("tickers", [])
     url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
     headers = {"User-Agent": "Mozilla/5.0"}
     html = requests.get(url, headers=headers, timeout=10).text
     tables = pd.read_html(StringIO(html))
     df = tables[0]
-    return df["Symbol"].tolist()
+    return [_normalize_sp500_symbol(symbol) for symbol in df["Symbol"].tolist()]
 def get_sp500_top20():
-    # 1) cache (1주 유지)
+    cached_payload = None
     if SP500_CACHE_PATH.exists():
         try:
-            cached = json.loads(SP500_CACHE_PATH.read_text())
-            cached_date = cached.get("date")
+            cached_payload = json.loads(SP500_CACHE_PATH.read_text())
+            cached_date = cached_payload.get("date")
             if cached_date:
                 age_days = (dt.datetime.now() - dt.datetime.fromisoformat(cached_date)).days
                 if age_days <= 7:
-                    return cached.get("tickers", [])
+                    return cached_payload.get("tickers", [])
         except Exception:
-            pass
-    # 2) fallback: calculate from Yahoo (slow)
-    tickers = get_sp500_tickers()
+            cached_payload = None
+    try:
+        tickers = get_sp500_tickers()
+    except Exception:
+        if cached_payload and cached_payload.get("tickers"):
+            return cached_payload.get("tickers", [])
+        return []
     caps = []
     for t in tickers:
         try:
@@ -566,6 +850,8 @@ def get_sp500_top20():
             continue
     caps.sort(key=lambda x: x[1], reverse=True)
     top20 = [t for t, _ in caps[:20]]
+    if not top20 and cached_payload and cached_payload.get("tickers"):
+        return cached_payload.get("tickers", [])
     # save cache
     try:
         SP500_CACHE_PATH.write_text(json.dumps({
@@ -577,7 +863,11 @@ def get_sp500_top20():
     return top20
 def get_sp500_weekly_change(top20, window=5):
     if not top20:
-        return pd.DataFrame(columns=SP500_COLUMNS)
+        cached_df, _ = _load_sp500_report_cache_df()
+        return cached_df
+    if _is_offline_mode():
+        cached_df, _ = _load_sp500_report_cache_df()
+        return cached_df
     try:
         data = yf.download(
             tickers=" ".join(top20),
@@ -589,11 +879,12 @@ def get_sp500_weekly_change(top20, window=5):
             progress=False,
         )
     except Exception:
-        return pd.DataFrame(columns=SP500_COLUMNS)
+        cached_df, _ = _load_sp500_report_cache_df()
+        return cached_df
     rows = []
     for t in top20:
         try:
-            series = data[t]["Close"].dropna()
+            series = _extract_symbol_close_series(data, t)
             if len(series) < window:
                 continue
             week = series.tail(window)
@@ -606,8 +897,19 @@ def get_sp500_weekly_change(top20, window=5):
         except Exception:
             continue
     df = pd.DataFrame(rows, columns=SP500_COLUMNS)
-    return _finalize_report_df(df)
+    df = _finalize_report_df(df)
+    if not df.empty:
+        _save_sp500_report_cache_df(df)
+        return df
+    cached_df, _ = _load_sp500_report_cache_df()
+    return cached_df
 def get_kospi_top10_and_change(window=5):
+    if _is_offline_mode():
+        cached_df, cached_note = _load_kospi_cache_df()
+        if not cached_df.empty:
+            note = cached_note or "Offline mode enabled; used cached KOSPI data."
+            return cached_df, note
+        return pd.DataFrame(columns=KOSPI_COLUMNS), "Offline mode enabled; no cached KOSPI data available."
     end_date, caps, caps_error = _find_latest_kospi_caps(max_lookback_days=14)
     if caps_error:
         naver_df, naver_err = _get_kospi_top20_from_naver_and_yf(window=window)
@@ -689,17 +991,24 @@ def get_kospi_top10_and_change(window=5):
         return df, "Live KOSPI rows were empty after fetch."
     _save_kospi_cache_df(df, end_date)
     return df, ""
-def build_report():
+def collect_report_inputs():
     kospi_df, kospi_status = get_kospi_top10_and_change()
     sp_top20 = get_sp500_top20()
     sp_df = get_sp500_weekly_change(sp_top20)
     alert_results, alert_statuses = get_market_momentum_alerts()
-    now = dt.datetime.now().strftime("%Y-%m-%d")
+    return kospi_df, kospi_status, sp_df, alert_results, alert_statuses
+
+
+def render_report(kospi_df, kospi_status, sp_df, alert_results, alert_statuses, report_date=None):
+    now = report_date or dt.datetime.now().strftime("%Y-%m-%d")
     subject = f"Weekly Market Report - {now}"
     kospi_notice_html = ""
     kospi_notice_text = ""
     alert_sections_html = []
     alert_sections_text = []
+    summary_html, summary_text = _build_summary_sections(
+        kospi_df, kospi_status, sp_df, alert_results, alert_statuses
+    )
     if kospi_df.empty and not kospi_status:
         kospi_notice_html = (
             "<p><strong>KOSPI data is unavailable.</strong> "
@@ -714,9 +1023,12 @@ def build_report():
         kospi_notice_text = f"[KOSPI] {kospi_status}\n"
     status_map = {config_path.name: status for config_path, status in alert_statuses}
     for config_path, alerts_df in alert_results:
-        cfg = load_alert_config(config_path)
-        section_title = str(cfg.get("name", config_path.stem))
-        triggered_alerts_df = alerts_df[alerts_df["triggered"]].copy() if not alerts_df.empty else pd.DataFrame(columns=ALERT_COLUMNS)
+        section_title = _safe_config_name(config_path)
+        triggered_alerts_df = (
+            alerts_df[alerts_df["triggered"]].copy()
+            if alerts_df is not None and not alerts_df.empty and "triggered" in alerts_df.columns
+            else pd.DataFrame(columns=ALERT_COLUMNS)
+        )
         section_status = status_map.get(config_path.name, "")
         section_notice_html = ""
         section_notice_text = ""
@@ -726,7 +1038,7 @@ def build_report():
         elif triggered_alerts_df.empty:
             section_notice_html = "<p><strong>Momentum notice:</strong> No symbols met the two-week alert criteria.</p>"
             section_notice_text = "[Momentum] No symbols met the two-week alert criteria.\n"
-        section_html = triggered_alerts_df.to_html(index=False) if not triggered_alerts_df.empty else "<p>No triggered alerts.</p>"
+        section_html = _to_html_table(triggered_alerts_df, "No triggered alerts.")
         alert_sections_html.append(
             f"<h3>{section_title} Two-Week Momentum Alerts</h3>\n{section_notice_html}\n{section_html}"
         )
@@ -735,14 +1047,15 @@ def build_report():
         if triggered_alerts_df.empty:
             section_text += "No triggered alerts."
         else:
-            section_text += triggered_alerts_df.to_string(index=False)
+            section_text += _to_text_table(triggered_alerts_df, "No triggered alerts.")
         alert_sections_text.append(section_text)
-    kospi_html = kospi_df.to_html(index=False)
-    sp_html = sp_df.to_html(index=False)
+    kospi_html = _to_html_table(kospi_df, "No KOSPI rows available.")
+    sp_html = _to_html_table(sp_df, "No S&P 500 rows available.")
     html = f"""
     <html>
     <body>
     <h2>Weekly Market Report ({now})</h2>
+    {summary_html}
     <h3>KOSPI Top 20 by Market Cap</h3>
     {kospi_notice_html}
     {kospi_html}
@@ -752,13 +1065,20 @@ def build_report():
     </body>
     </html>
     """
-    text = "Weekly Market Report\n\nKOSPI Top 20:\n"
+    text = "Weekly Market Report\n\n"
+    text += summary_text
+    text += "\n\nKOSPI Top 20:\n"
     text += kospi_notice_text
-    text += kospi_df.to_string(index=False)
+    text += _to_text_table(kospi_df, "No KOSPI rows available.")
     text += "\n\nS&P 500 Top 20:\n"
-    text += sp_df.to_string(index=False)
+    text += _to_text_table(sp_df, "No S&P 500 rows available.")
     text += "".join(alert_sections_text)
     return subject, text, html
+
+
+def build_report():
+    kospi_df, kospi_status, sp_df, alert_results, alert_statuses = collect_report_inputs()
+    return render_report(kospi_df, kospi_status, sp_df, alert_results, alert_statuses)
 def send_email(cfg, subject, text, html):
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -773,11 +1093,93 @@ def send_email(cfg, subject, text, html):
         server.login(cfg["smtp_user"], cfg["smtp_pass"])
         recipients = [addr.strip() for addr in cfg["email_to"].split(",") if addr.strip()]
         server.send_message(msg, from_addr=cfg["email_from"], to_addrs=recipients)
-def main():
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description="Generate and optionally send the weekly market report.")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Generate the report and save local artifacts without sending email.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=str(OUTPUT_DIR),
+        help="Directory where report artifacts (.txt/.html/.json) are saved.",
+    )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Skip live network fetches and build the report from cached data only.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    output_dir = Path(args.output_dir).expanduser()
+    set_offline_mode(args.offline)
+    kospi_df, kospi_status, sp_df, alert_results, alert_statuses = collect_report_inputs()
+    report_date = dt.datetime.now().strftime("%Y-%m-%d")
+    history_paths = save_market_history(report_date, kospi_df, sp_df, alert_results)
+    subject, text, html = render_report(
+        kospi_df,
+        kospi_status,
+        sp_df,
+        alert_results,
+        alert_statuses,
+        report_date=report_date,
+    )
+    if args.dry_run:
+        artifacts = save_report_artifacts(
+            subject,
+            text,
+            html,
+            output_dir=output_dir,
+            metadata={
+                "delivery_status": "dry_run",
+                "history_kospi_path": str(history_paths["kospi"]),
+                "history_sp500_path": str(history_paths["sp500"]),
+                "history_alerts_path": str(history_paths["alerts"]),
+            },
+        )
+        print(f"Dry run complete: {artifacts['html']}")
+        return
+
     cfg = load_env()
-    subject, text, html = build_report()
-    send_email(cfg, subject, text, html)
-    print("Email sent:", subject)
+    try:
+        send_email(cfg, subject, text, html)
+    except Exception as e:
+        artifacts = save_report_artifacts(
+            subject,
+            text,
+            html,
+            output_dir=output_dir,
+            metadata={
+                "delivery_status": "send_failed",
+                "delivery_error": str(e),
+                "history_kospi_path": str(history_paths["kospi"]),
+                "history_sp500_path": str(history_paths["sp500"]),
+                "history_alerts_path": str(history_paths["alerts"]),
+            },
+        )
+        print(f"Email send failed. Saved report locally: {artifacts['html']}")
+        raise
+
+    artifacts = save_report_artifacts(
+        subject,
+        text,
+        html,
+        output_dir=output_dir,
+        metadata={
+            "delivery_status": "sent",
+            "history_kospi_path": str(history_paths["kospi"]),
+            "history_sp500_path": str(history_paths["sp500"]),
+            "history_alerts_path": str(history_paths["alerts"]),
+        },
+    )
+    print(f"Email sent: {subject}")
+    print(f"Saved report locally: {artifacts['html']}")
 if __name__ == "__main__":
     try:
         main()

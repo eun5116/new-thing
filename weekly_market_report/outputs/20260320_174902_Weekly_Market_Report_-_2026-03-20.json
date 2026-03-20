@@ -1,0 +1,10 @@
+{
+  "saved_at": "2026-03-20T17:49:02.987140",
+  "subject": "Weekly Market Report - 2026-03-20",
+  "text_path": "/home/jack/trail and error/weekly_market_report/outputs/20260320_174902_Weekly_Market_Report_-_2026-03-20.txt",
+  "html_path": "/home/jack/trail and error/weekly_market_report/outputs/20260320_174902_Weekly_Market_Report_-_2026-03-20.html",
+  "delivery_status": "dry_run",
+  "history_kospi_path": "/home/jack/trail and error/weekly_market_report/history/kospi_top20_history.csv",
+  "history_sp500_path": "/home/jack/trail and error/weekly_market_report/history/sp500_top20_history.csv",
+  "history_alerts_path": "/home/jack/trail and error/weekly_market_report/history/momentum_alert_history.csv"
+}

@@ -9,3 +9,76 @@ ERROR: index -1 is out of bounds for axis 0 with size 0
 [2026-03-02 16:13:30 KST] weekly job start
 Email sent: Weekly Market Report - 2026-03-02
 [2026-03-02 16:13:35 KST] weekly job end (success)
+[2026-03-20 17:06:02 KST] weekly job start
+
+1 Failed download:
+['005930.KS']: TypeError("'NoneType' object is not subscriptable")
+
+1 Failed download:
+['000660.KS']: TypeError("'NoneType' object is not subscriptable")
+
+1 Failed download:
+['373220.KS']: TypeError("'NoneType' object is not subscriptable")
+
+1 Failed download:
+['207940.KS']: TypeError("'NoneType' object is not subscriptable")
+
+1 Failed download:
+['005380.KS']: TypeError("'NoneType' object is not subscriptable")
+
+1 Failed download:
+['068270.KS']: TypeError("'NoneType' object is not subscriptable")
+
+1 Failed download:
+['035420.KS']: TypeError("'NoneType' object is not subscriptable")
+
+1 Failed download:
+['005935.KS']: TypeError("'NoneType' object is not subscriptable")
+
+1 Failed download:
+['000270.KS']: TypeError("'NoneType' object is not subscriptable")
+
+1 Failed download:
+['105560.KS']: TypeError("'NoneType' object is not subscriptable")
+
+1 Failed download:
+['055550.KS']: TypeError("'NoneType' object is not subscriptable")
+Failed to get ticker '005490.KS' reason: Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+
+1 Failed download:
+['005490.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+Failed to get ticker '006400.KS' reason: Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+
+1 Failed download:
+['006400.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['012330.KS']: TypeError("'NoneType' object is not subscriptable")
+Failed to get ticker '051910.KS' reason: Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+
+1 Failed download:
+['051910.KS']: TypeError("'NoneType' object is not subscriptable")
+
+1 Failed download:
+['028260.KS']: TypeError("'NoneType' object is not subscriptable")
+Failed to get ticker '096770.KS' reason: Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+
+1 Failed download:
+['096770.KS']: TypeError("'NoneType' object is not subscriptable")
+Failed to get ticker '015760.KS' reason: Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+
+1 Failed download:
+['015760.KS']: TypeError("'NoneType' object is not subscriptable")
+Failed to get ticker '066570.KS' reason: Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+
+1 Failed download:
+['066570.KS']: TypeError("'NoneType' object is not subscriptable")
+Failed to get ticker '017670.KS' reason: Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+
+1 Failed download:
+['017670.KS']: TypeError("'NoneType' object is not subscriptable")
+
+20 Failed downloads:
+['TSLA', 'XOM', 'AMZN', 'COST', 'CVX', 'JNJ', 'MA', 'MU', 'GOOG', 'LLY', 'WMT', 'GOOGL', 'AAPL', 'ORCL', 'META', 'V', 'NVDA', 'MSFT', 'JPM', 'AVGO']: TypeError("'NoneType' object is not subscriptable")
+ERROR: [Errno -3] Temporary failure in name resolution
+[2026-03-20 17:07:03 KST] weekly job end (failed: exit 1)
