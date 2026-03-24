@@ -1,0 +1,7 @@
+# Local-only artifacts for weekly market report
+weekly_market_report/.env
+weekly_market_report/__pycache__/
+weekly_market_report/cache/
+weekly_market_report/history/
+weekly_market_report/outputs/
+weekly_market_report/weekly.log

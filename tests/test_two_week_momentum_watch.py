@@ -72,6 +72,32 @@ class TwoWeekMomentumWatchTests(unittest.TestCase):
         self.assertEqual(weekly_report._normalize_sp500_symbol("BRK.B"), "BRK-B")
         self.assertEqual(weekly_report._normalize_sp500_symbol("bf.b"), "BF-B")
 
+    def test_download_close_map_retries_missing_symbols_individually(self):
+        columns = pd.MultiIndex.from_product([["AAPL", "MSFT"], ["Close"]])
+        bulk_df = pd.DataFrame(
+            [[100.0, None], [101.0, None], [102.0, None]],
+            index=pd.date_range("2026-03-18", periods=3, freq="B"),
+            columns=columns,
+        )
+        retried_series = pd.Series(
+            [200.0, 201.0, 202.0],
+            index=pd.date_range("2026-03-18", periods=3, freq="B"),
+        )
+
+        with mock.patch.object(weekly_report.yf, "download", return_value=bulk_df):
+            with mock.patch.object(
+                weekly_report,
+                "_download_single_symbol_close",
+                return_value=retried_series,
+            ) as retry_mock:
+                close_map = weekly_report._download_yfinance_close_map(
+                    ["AAPL", "MSFT"], "1d", False, chunk_size=2
+                )
+
+        self.assertEqual(len(close_map["AAPL"]), 3)
+        self.assertEqual(len(close_map["MSFT"]), 3)
+        retry_mock.assert_called_once_with("MSFT", "1d", False, suffix="")
+
     def test_build_report_includes_summary_and_handles_empty_sections(self):
         alert_df = pd.DataFrame(
             [
@@ -294,6 +320,15 @@ class TwoWeekMomentumWatchTests(unittest.TestCase):
 
         self.assertEqual(df["Ticker"].tolist(), ["AAPL"])
         self.assertEqual(df.iloc[0]["ChangePct"], 10.0)
+
+    def test_alert_status_message_uses_unavailable_during_this_run_wording(self):
+        with mock.patch.object(weekly_report, "load_alert_config", return_value={"market_scope": "sp500", "interval": "1d", "price_basis": "adjusted_close", "alert_name": "two_week_momentum_watch", "window_trading_days": 10, "min_total_return": 0.10, "trend_policy": "tolerant", "min_up_days": 8, "max_consecutive_down_days": 2, "name": "sp500_alerts_v1"}):
+            with mock.patch.object(weekly_report, "_resolve_alert_universe", return_value=(["AAPL"], {})):
+                with mock.patch.object(weekly_report, "_download_yfinance_close_map", return_value={"AAPL": pd.Series(dtype=float)}):
+                    df, status = weekly_report.get_two_week_momentum_alerts(SP500_CONFIG_PATH)
+
+        self.assertTrue(df.empty)
+        self.assertIn("unavailable during this run", status)
 
 
 if __name__ == "__main__":

@@ -293,6 +293,23 @@ def _normalize_sp500_symbol(symbol):
     return str(symbol).strip().upper().replace(".", "-")
 
 
+def _download_single_symbol_close(symbol, interval, auto_adjust, suffix=""):
+    actual_symbol = f"{symbol}{suffix}"
+    try:
+        data = yf.download(
+            tickers=actual_symbol,
+            period="1mo",
+            interval=interval,
+            auto_adjust=auto_adjust,
+            group_by="ticker",
+            threads=False,
+            progress=False,
+        )
+    except Exception:
+        return pd.Series(dtype=float)
+    return _extract_close_series(data)
+
+
 def save_market_history(report_date, kospi_df, sp_df, alert_results, history_dir=HISTORY_DIR):
     history_dir.mkdir(parents=True, exist_ok=True)
     captured_at = dt.datetime.now().isoformat()
@@ -584,6 +601,9 @@ def _download_yfinance_close_map(symbols, interval, auto_adjust, suffix="", chun
             continue
         for symbol, actual_symbol in zip(chunk, actual_symbols):
             close_map[symbol] = _extract_symbol_close_series(data, actual_symbol)
+        missing_symbols = [symbol for symbol in chunk if close_map.get(symbol, pd.Series(dtype=float)).empty]
+        for symbol in missing_symbols:
+            close_map[symbol] = _download_single_symbol_close(symbol, interval, auto_adjust, suffix=suffix)
     return close_map
 
 
@@ -695,9 +715,9 @@ def get_two_week_momentum_alerts(config_path):
         df = df.sort_values(["triggered", "total_return"], ascending=[False, False]).reset_index(drop=True)
 
     if missing_symbols and df.empty:
-        return df, f"Alert price data unavailable for: {', '.join(missing_symbols)}"
+        return df, f"Alert price data unavailable during this run: {', '.join(missing_symbols)}"
     if missing_symbols:
-        return df, f"Some alert symbols were skipped due to insufficient price history: {', '.join(missing_symbols)}"
+        return df, f"Some alert symbols were skipped because price data was unavailable during this run: {', '.join(missing_symbols)}"
     return df, ""
 
 
@@ -885,6 +905,8 @@ def get_sp500_weekly_change(top20, window=5):
     for t in top20:
         try:
             series = _extract_symbol_close_series(data, t)
+            if len(series) < window:
+                series = _download_single_symbol_close(t, "1d", False)
             if len(series) < window:
                 continue
             week = series.tail(window)
