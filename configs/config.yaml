@@ -1,0 +1,30 @@
+project:
+  data_dir: data
+
+market:
+  tickers:
+    - 005930.KS
+    - 000660.KS
+    - 035420.KS
+    - 005380.KS
+    - 051910.KS
+  start: "2016-01-01"
+  end: null
+  price_source: yfinance
+
+features:
+  adjusted_price_column: adj_close
+  train_end: "2021-12-31"
+  valid_end: "2023-12-31"
+  event_lag_days: 1
+
+trading:
+  initial_cash: 1000000.0
+  transaction_cost_pct: 0.001
+  volatility_penalty: 0.05
+  max_position_ratio: 1.0
+
+training:
+  algorithm: PPO
+  total_timesteps: 50000
+  seed: 42

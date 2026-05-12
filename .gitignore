@@ -1,0 +1,13 @@
+.env
+.venv/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
+data/
+data_krx/
+data_spy/
+models/
+reports/
+
+*.lock
