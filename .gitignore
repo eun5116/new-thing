@@ -1,0 +1,12 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+weekly_market_report/cache/
+weekly_market_report/data/
+weekly_market_report/history/
+weekly_market_report/outputs/
+weekly_market_report/weekly.log
+
