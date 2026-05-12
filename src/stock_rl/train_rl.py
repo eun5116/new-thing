@@ -5,7 +5,7 @@ import argparse
 import pandas as pd
 
 from stock_rl.config import load_config, project_path
-from stock_rl.trading_env import StockTradingEnv, TradingEnvConfig
+from stock_rl.trading_env import MultiTickerTradingEnv, StockTradingEnv, TradingEnvConfig, normalize_ticker
 
 
 def _load_algorithms():
@@ -24,18 +24,38 @@ def train(config_path: str, ticker: str | None = None) -> str:
     data_dir = config["project"]["data_dir"]
     train_path = project_path(config_path, data_dir, "processed", "train.parquet")
     train_features = pd.read_parquet(train_path)
-    ticker = ticker or config["market"]["tickers"][0]
-    if ticker not in set(train_features["ticker"]):
-        raise ValueError(f"ticker not found in training features: {ticker}")
     env_config = TradingEnvConfig(**config["trading"])
-    env = StockTradingEnv(train_features, ticker=ticker, config=env_config)
+    train_scope = config["training"].get("train_scope", "single_ticker")
+    if train_scope == "multi_ticker" and ticker is None:
+        tickers = [normalize_ticker(ticker) for ticker in config["market"]["tickers"]]
+        available = set(train_features["ticker"].astype(str).map(normalize_ticker))
+        missing = sorted(set(tickers).difference(available))
+        if missing:
+            raise ValueError(f"tickers not found in training features: {missing}")
+        env = MultiTickerTradingEnv(train_features, tickers=tickers, config=env_config)
+        model_ticker = "multi"
+    else:
+        ticker = ticker or config["market"]["tickers"][0]
+        ticker = normalize_ticker(ticker)
+        available = set(train_features["ticker"].astype(str).map(normalize_ticker))
+        if ticker not in available:
+            raise ValueError(f"ticker not found in training features: {ticker}")
+        env = StockTradingEnv(train_features, ticker=ticker, config=env_config)
+        model_ticker = ticker
 
     algo_name = config["training"].get("algorithm", "PPO")
     model_cls = _load_algorithms()[algo_name]
-    model = model_cls("MlpPolicy", env, verbose=1, seed=config["training"].get("seed", 42))
+    model_kwargs = {
+        "verbose": 1,
+        "seed": config["training"].get("seed", 42),
+    }
+    for key in ["learning_rate", "ent_coef", "gamma", "gae_lambda", "clip_range"]:
+        if key in config["training"]:
+            model_kwargs[key] = config["training"][key]
+    model = model_cls("MlpPolicy", env, **model_kwargs)
     model.learn(total_timesteps=config["training"].get("total_timesteps", 50_000))
 
-    model_name = config["training"].get("model_name", f"{algo_name.lower()}_{ticker}")
+    model_name = config["training"].get("model_name", f"{algo_name.lower()}_{model_ticker}")
     out_path = project_path(config_path, "models", model_name)
     model.save(out_path)
     return str(out_path)

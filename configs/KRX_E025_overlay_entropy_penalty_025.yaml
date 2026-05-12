@@ -1,0 +1,47 @@
+project:
+  data_dir: data_krx
+
+market:
+  tickers:
+    - "005930"
+    - "000660"
+    - "035420"
+    - "005380"
+    - "051910"
+  start: "2016-01-01"
+  end: null
+  price_source: krx_openapi
+  krx_market: KOSPI
+
+features:
+  adjusted_price_column: adj_close
+  train_end: "2021-12-31"
+  valid_end: "2023-12-31"
+  event_lag_days: 1
+
+trading:
+  initial_cash: 1000000.0
+  transaction_cost_pct: 0.001
+  volatility_penalty: 0.05
+  max_position_ratio: 1.0
+  action_mode: ma20_60_overlay
+  reward_mode: ma20_60_drawdown_hybrid
+  target_position_bins: 5
+  overlay_step_size: 0.25
+  drawdown_penalty: 0.25
+  turnover_penalty: 0.0005
+  drawdown_soft_limit: 0.15
+  drawdown_hard_limit: 0.20
+  drawdown_soft_penalty: 0.5
+  drawdown_hard_penalty: 2.0
+  hard_drawdown_terminate: false
+  ma_underperformance_penalty: 1.0
+  ma_outperformance_bonus: 0.25
+
+training:
+  algorithm: PPO
+  total_timesteps: 50000
+  seed: 42
+  train_scope: multi_ticker
+  ent_coef: 0.02
+  model_name: ppo_KRX_E025_overlay_entropy_penalty_025

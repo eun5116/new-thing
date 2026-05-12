@@ -3,7 +3,7 @@ import pandas as pd
 from stock_rl.build_features import add_event_features, add_market_features, add_price_features, split_and_write
 from stock_rl.krx_openapi import normalize_stock_daily
 from stock_rl.smoke_env import run_smoke
-from stock_rl.trading_env import StockTradingEnv, TradingEnvConfig
+from stock_rl.trading_env import MultiTickerTradingEnv, StockTradingEnv, TradingEnvConfig
 
 
 def sample_prices():
@@ -25,6 +25,19 @@ def sample_prices():
     )
 
 
+def sample_multi_ticker_prices():
+    first = sample_prices()
+    second = first.copy()
+    second["ticker"] = "QQQ"
+    second["adj_close"] = [120 - i * 0.2 for i in range(len(second))]
+    second["close"] = second["adj_close"]
+    second["open"] = second["adj_close"]
+    second["high"] = second["adj_close"] + 1
+    second["low"] = second["adj_close"] - 1
+    second["trading_value"] = second["volume"] * second["adj_close"]
+    return pd.concat([first, second], ignore_index=True)
+
+
 def test_add_price_features_uses_next_day_target():
     features = add_price_features(sample_prices()).dropna()
 
@@ -38,7 +51,9 @@ def test_add_price_features_uses_next_day_target():
         "turnover_value_ratio",
         "ma20_60_signal",
         "ma20_60_gap",
+        "ma20_60_position",
     }.issubset(features.columns)
+    assert set(features["ma20_60_position"].dropna().unique()).issubset({0.0, 1.0})
 
 
 def test_add_market_features_joins_index_context():
@@ -59,6 +74,9 @@ def test_add_market_features_joins_index_context():
     assert "market_volatility_20d" in merged.columns
     assert "excess_return_1d" in merged.columns
     assert "drawdown_vs_market_60d" in merged.columns
+    assert "market_drop_recent_5d" in merged.columns
+    assert "market_trend_regime" in merged.columns
+    assert "relative_strength_regime" in merged.columns
     assert merged["market_return_1d"].abs().sum() > 0
 
 
@@ -96,6 +114,9 @@ def test_add_event_features_supports_all_market_events():
 
     assert "event_policy" in merged.columns
     assert merged.loc[merged["date"] == event_date, "event_any"].iloc[0] == 1.0
+    assert "event_recent_5d" in merged.columns
+    later = merged[merged["date"] > event_date].head(1)
+    assert later["event_recent_5d"].iloc[0] == 1.0
 
 
 def test_trading_env_steps_with_discrete_actions():
@@ -174,6 +195,93 @@ def test_trading_env_supports_drawdown_budget_reward():
     assert terminated is False
     assert "drawdown" in info
     assert "turnover" in info
+
+
+def test_trading_env_supports_ma20_60_relative_reward():
+    features = add_price_features(sample_prices()).dropna().reset_index(drop=True)
+    env = StockTradingEnv(
+        features,
+        ticker="SPY",
+        config=TradingEnvConfig(
+            action_mode="target_position",
+            reward_mode="ma20_60_relative",
+            turnover_penalty=0.001,
+            ma_underperformance_penalty=1.0,
+        ),
+    )
+
+    obs, info = env.reset()
+    next_obs, reward, terminated, truncated, info = env.step(4)
+
+    assert next_obs.shape == obs.shape
+    assert isinstance(reward, float)
+    assert terminated is False
+    assert "ma20_60_return" in info
+    assert "target_ratio" in info
+    assert "overlay" in info
+
+
+def test_trading_env_supports_ma20_60_overlay_actions():
+    features = add_price_features(sample_prices()).dropna().reset_index(drop=True)
+    env = StockTradingEnv(
+        features,
+        ticker="SPY",
+        config=TradingEnvConfig(
+            action_mode="ma20_60_overlay",
+            reward_mode="ma20_60_relative",
+            target_position_bins=5,
+            overlay_step_size=0.25,
+        ),
+    )
+
+    obs, info = env.reset()
+    next_obs, reward, terminated, truncated, info = env.step(4)
+
+    assert env.action_space.n == 5
+    assert next_obs.shape == obs.shape
+    assert isinstance(reward, float)
+    assert terminated is False
+    assert "ma20_60_return" in info
+
+
+def test_trading_env_supports_ma20_60_drawdown_hybrid_reward():
+    features = add_price_features(sample_prices()).dropna().reset_index(drop=True)
+    env = StockTradingEnv(
+        features,
+        ticker="SPY",
+        config=TradingEnvConfig(
+            action_mode="ma20_60_overlay",
+            reward_mode="ma20_60_drawdown_hybrid",
+            target_position_bins=5,
+            overlay_step_size=0.25,
+            drawdown_penalty=0.5,
+        ),
+    )
+
+    obs, info = env.reset()
+    next_obs, reward, terminated, truncated, info = env.step(2)
+
+    assert next_obs.shape == obs.shape
+    assert isinstance(reward, float)
+    assert terminated is False
+    assert "drawdown" in info
+
+
+def test_multi_ticker_env_samples_and_reports_ticker():
+    features = add_price_features(sample_multi_ticker_prices()).dropna().reset_index(drop=True)
+    env = MultiTickerTradingEnv(
+        features,
+        tickers=["SPY", "QQQ"],
+        config=TradingEnvConfig(action_mode="target_position", reward_mode="ma20_60_relative"),
+    )
+
+    obs, info = env.reset(seed=7, options={"ticker": "QQQ"})
+    next_obs, reward, terminated, truncated, step_info = env.step(2)
+
+    assert info["ticker"] == "QQQ"
+    assert step_info["ticker"] == "QQQ"
+    assert next_obs.shape == obs.shape
+    assert isinstance(reward, float)
 
 
 def test_smoke_runner_uses_existing_feature_file(tmp_path):

@@ -40,6 +40,13 @@ FEATURE_COLUMNS = [
     "drawdown_vs_market_60d",
     "ma20_60_signal",
     "ma20_60_gap",
+    "ma20_60_position",
+    "market_drop_recent_5d",
+    "market_drop_recent_20d",
+    "relative_strength_regime",
+    "market_trend_regime",
+    "event_recent_5d",
+    "event_recent_20d",
 ]
 
 MARKET_FEATURE_DEFAULTS = {
@@ -47,6 +54,9 @@ MARKET_FEATURE_DEFAULTS = {
     "market_return_5d": 0.0,
     "market_ma20_gap": 0.0,
     "market_volatility_20d": 0.0,
+    "market_drop_recent_5d": 0.0,
+    "market_drop_recent_20d": 0.0,
+    "market_trend_regime": 0.0,
 }
 
 
@@ -123,12 +133,16 @@ def add_price_features(prices: pd.DataFrame, price_col: str = "adj_close") -> pd
         ma60 = px.rolling(60).mean()
         g["ma20_60_signal"] = (ma20 > ma60).astype(float)
         g["ma20_60_gap"] = ma20 / ma60 - 1.0
+        g["ma20_60_position"] = g["ma20_60_signal"].shift(1).fillna(0.0)
         for column, value in MARKET_FEATURE_DEFAULTS.items():
             g[column] = value
         g["excess_return_1d"] = 0.0
         g["excess_return_5d"] = 0.0
         g["relative_strength_20d"] = 0.0
         g["drawdown_vs_market_60d"] = 0.0
+        g["relative_strength_regime"] = 0.0
+        g["event_recent_5d"] = 0.0
+        g["event_recent_20d"] = 0.0
         g["target_return_1d"] = px.shift(-1) / px - 1.0
         frames.append(g)
 
@@ -184,6 +198,10 @@ def add_market_features(features: pd.DataFrame, indices: pd.DataFrame) -> pd.Dat
         group["market_ma20_gap"] = close / close.rolling(20).mean() - 1.0
         group["market_volatility_20d"] = ret_1d.rolling(20).std() * np.sqrt(252)
         group["market_drawdown_60d"] = close / close.rolling(60).max() - 1.0
+        market_drop = (ret_1d <= -0.02).astype(float)
+        group["market_drop_recent_5d"] = market_drop.shift(1).rolling(5, min_periods=1).max()
+        group["market_drop_recent_20d"] = market_drop.shift(1).rolling(20, min_periods=1).max()
+        group["market_trend_regime"] = np.sign(group["market_ma20_gap"]).fillna(0.0)
         frames.append(group[["date", "market", "market_drawdown_60d", *defaults.keys()]])
 
     if not frames:
@@ -201,9 +219,11 @@ def add_market_features(features: pd.DataFrame, indices: pd.DataFrame) -> pd.Dat
     enriched["excess_return_5d"] = enriched["return_5d"] - enriched["market_return_5d"]
     enriched["relative_strength_20d"] = enriched["return_20d"] - enriched["market_return_1d"].rolling(20).sum()
     enriched["drawdown_vs_market_60d"] = enriched["drawdown_60d"] - enriched["market_drawdown_60d"]
+    enriched["relative_strength_regime"] = np.sign(enriched["relative_strength_20d"]).fillna(0.0)
     enriched = enriched.drop(columns=["market_drawdown_60d"])
     for column, value in relative_defaults.items():
         enriched[column] = enriched[column].fillna(value)
+    enriched["relative_strength_regime"] = enriched["relative_strength_regime"].fillna(0.0)
     return enriched
 
 
@@ -221,7 +241,7 @@ def read_events(events_path: Path) -> pd.DataFrame:
 def add_event_features(features: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
     if events.empty:
         features["event_any"] = 0.0
-        return features
+        return add_event_recent_features(features)
 
     event_scores = (
         events.assign(event_col=lambda x: "event_" + x["event_type"].astype(str))
@@ -245,7 +265,22 @@ def add_event_features(features: pd.DataFrame, events: pd.DataFrame) -> pd.DataF
     event_cols = [c for c in ticker_specific.columns if c.startswith("event_")]
     ticker_specific[event_cols] = ticker_specific[event_cols].fillna(0.0)
     ticker_specific["event_any"] = (ticker_specific[event_cols].abs().sum(axis=1) > 0).astype(float)
+    ticker_specific = add_event_recent_features(ticker_specific)
     return ticker_specific
+
+
+def add_event_recent_features(features: pd.DataFrame) -> pd.DataFrame:
+    enriched = features.sort_values(["ticker", "date"]).copy()
+    if "event_any" not in enriched.columns:
+        enriched["event_any"] = 0.0
+    frames = []
+    for _, group in enriched.groupby("ticker", sort=False):
+        g = group.copy()
+        event_any = g["event_any"].astype(float)
+        g["event_recent_5d"] = event_any.shift(1).rolling(5, min_periods=1).max().fillna(0.0)
+        g["event_recent_20d"] = event_any.shift(1).rolling(20, min_periods=1).max().fillna(0.0)
+        frames.append(g)
+    return pd.concat(frames, ignore_index=True)
 
 
 def split_and_write(features: pd.DataFrame, config: dict, out_dir: Path) -> dict[str, Path]:
