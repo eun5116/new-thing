@@ -1,0 +1,1757 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Exodus Chat Escape</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      --bg: #090d14;
+      --panel: rgba(12, 18, 30, 0.86);
+      --panel-solid: #111827;
+      --line: rgba(255,255,255,0.14);
+      --text: #f8fafc;
+      --muted: #b6c2d2;
+      --muted2: #7f8da3;
+      --gold: #f4c95d;
+      --teal: #40d3c5;
+      --red: #ef6f6c;
+      --green: #66d17e;
+      --ink: #07101b;
+      --radius: 8px;
+      --shadow: 0 22px 80px rgba(0,0,0,0.46);
+    }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", Arial, sans-serif;
+    }
+
+    body {
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    button { font: inherit; }
+    button { border: 0; cursor: pointer; }
+
+    .app {
+      height: 100vh;
+      height: 100dvh;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      overflow: hidden;
+      background:
+        linear-gradient(90deg, rgba(2,6,23,0.84), rgba(2,6,23,0.34), rgba(2,6,23,0.82)),
+        var(--scene-image),
+        linear-gradient(135deg, #10151f, #0b1220);
+      background-size: cover;
+      background-position: center;
+    }
+
+    .sidebar {
+      min-height: 0;
+      border-right: 1px solid var(--line);
+      background: rgba(6, 12, 22, 0.82);
+      backdrop-filter: blur(14px);
+      padding: 22px;
+      overflow-y: auto;
+    }
+
+    .brand {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 22px;
+    }
+
+    .eyebrow {
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.16;
+      letter-spacing: 0;
+    }
+
+    .intro {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.58;
+      font-size: 14px;
+    }
+
+    .meter {
+      margin: 20px 0;
+    }
+
+    .meter-top {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .bar {
+      height: 10px;
+      background: rgba(255,255,255,0.09);
+      border: 1px solid rgba(255,255,255,0.12);
+      overflow: hidden;
+      border-radius: 999px;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--teal), var(--gold), var(--red));
+      transition: width .32s ease;
+    }
+
+    .scene-list {
+      display: grid;
+      gap: 8px;
+      margin: 18px 0;
+    }
+
+    .scene-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 11px;
+      border: 1px solid rgba(255,255,255,0.11);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,0.055);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .scene-pill.active {
+      color: var(--text);
+      border-color: rgba(244,201,93,0.55);
+      background: rgba(244,201,93,0.14);
+    }
+
+    .scene-pill.done {
+      color: #dcfce7;
+      border-color: rgba(102,209,126,0.38);
+      background: rgba(102,209,126,0.12);
+    }
+
+    .side-actions {
+      display: grid;
+      gap: 9px;
+      margin-top: 18px;
+    }
+
+    .btn {
+      min-height: 42px;
+      border-radius: var(--radius);
+      padding: 10px 13px;
+      font-weight: 800;
+      color: var(--text);
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.16);
+    }
+
+    .btn.primary {
+      color: #1a1200;
+      background: linear-gradient(135deg, #ffe08a, #f0aa2c);
+      border-color: rgba(255,255,255,0.16);
+    }
+
+    .btn:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    .main {
+      position: relative;
+      min-height: 0;
+      display: block;
+      padding: 24px;
+      overflow: hidden;
+    }
+
+    .topline {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      min-height: 64px;
+    }
+
+    .scene-title {
+      display: grid;
+      gap: 3px;
+    }
+
+    .scene-title strong {
+      font-size: 20px;
+    }
+
+    .scene-title span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      background: rgba(0,0,0,0.28);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 999px;
+      padding: 8px 12px;
+    }
+
+    .status::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 14px rgba(102,209,126,.7);
+    }
+
+    .scene-hero {
+      position: relative;
+      min-height: 0;
+      height: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(2,6,23,0.62) 0%, rgba(2,6,23,0.12) 34%, rgba(2,6,23,0.34) 100%),
+        linear-gradient(90deg, rgba(2,6,23,0.04), rgba(2,6,23,0.34)),
+        var(--scene-image),
+        linear-gradient(135deg, #10151f, #0b1220);
+      background-size: cover;
+      background-position: center;
+      box-shadow: var(--shadow);
+      isolation: isolate;
+    }
+
+    .scene-hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(2,6,23,0.40), transparent 28%, rgba(2,6,23,0.56)),
+        radial-gradient(circle at 74% 55%, transparent 0 22%, rgba(2,6,23,0.28) 56%, rgba(2,6,23,0.54));
+      pointer-events: none;
+    }
+
+    .scene-hero::before {
+      content: "";
+      position: absolute;
+      inset: -8%;
+      z-index: 0;
+      background:
+        radial-gradient(circle at 72% 34%, rgba(244,201,93,0.28), transparent 18%),
+        radial-gradient(circle at 88% 58%, rgba(64,211,197,0.16), transparent 20%),
+        linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.08), transparent 46%);
+      opacity: .72;
+      animation: sceneLightSweep 7s ease-in-out infinite alternate;
+      pointer-events: none;
+    }
+
+    .scene-life {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .scene-life span {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: rgba(255, 232, 164, 0.78);
+      box-shadow: 0 0 18px rgba(244,201,93,0.55);
+      opacity: .25;
+      animation: emberDrift 6.5s linear infinite;
+    }
+
+    .scene-life span:nth-child(1) { left: 58%; bottom: 18%; animation-delay: 0s; }
+    .scene-life span:nth-child(2) { left: 70%; bottom: 10%; animation-delay: 1.2s; transform: scale(.72); }
+    .scene-life span:nth-child(3) { left: 84%; bottom: 22%; animation-delay: 2.1s; transform: scale(.9); }
+    .scene-life span:nth-child(4) { left: 78%; bottom: 34%; animation-delay: 3.4s; transform: scale(.55); }
+
+    .hero-copy {
+      position: absolute;
+      left: 24px;
+      right: 24px;
+      top: 20px;
+      bottom: auto;
+      z-index: 5;
+      display: grid;
+      gap: 7px;
+      max-width: 720px;
+      text-shadow: 0 2px 18px rgba(0,0,0,0.72);
+    }
+
+    .hero-copy span {
+      width: fit-content;
+      border: 1px solid rgba(244,201,93,0.38);
+      border-radius: 999px;
+      padding: 5px 9px;
+      background: rgba(0,0,0,0.32);
+      color: #fde68a;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .hero-copy strong {
+      font-size: clamp(29px, 4vw, 58px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    .hero-copy p {
+      margin: 0;
+      color: #e5edf8;
+      line-height: 1.5;
+      font-size: 15px;
+      max-width: 620px;
+    }
+
+    .hero-npc {
+      position: absolute;
+      right: clamp(-28px, 1vw, 28px);
+      bottom: -18px;
+      z-index: 3;
+      width: min(58%, 560px);
+      height: 112%;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .hero-npc::before {
+      content: "";
+      position: absolute;
+      width: 76%;
+      aspect-ratio: 1;
+      right: 8%;
+      bottom: 5%;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(244,201,93,0.20), rgba(244,201,93,0.08) 42%, transparent 68%);
+      filter: blur(2px);
+      transform: scale(.94);
+      opacity: .65;
+      animation: auraPulse 4.5s ease-in-out infinite;
+    }
+
+    .hero-npc::after {
+      content: "";
+      position: absolute;
+      right: 18%;
+      top: 18%;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.62);
+      box-shadow:
+        0 0 24px rgba(244,201,93,0.65),
+        42px 58px 0 -3px rgba(255,232,164,0.40),
+        -30px 96px 0 -4px rgba(64,211,197,0.34);
+      opacity: .54;
+      animation: glintPulse 3.8s ease-in-out infinite;
+    }
+
+    .hero-npc img {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      object-position: bottom center;
+      opacity: 0;
+      filter:
+        drop-shadow(0 34px 34px rgba(0,0,0,0.68))
+        drop-shadow(0 0 22px rgba(244,201,93,0.12));
+      transform-origin: 50% 100%;
+      animation: characterPresence 7s ease-in-out infinite;
+      transition: opacity 900ms ease-in-out, filter 900ms ease-in-out;
+      will-change: opacity, filter;
+    }
+
+    .hero-npc img.active {
+      opacity: 1;
+    }
+
+    .scene-hero.speaking .hero-npc img {
+      animation: characterSpeaking 1.25s ease-in-out infinite;
+      filter:
+        drop-shadow(0 34px 34px rgba(0,0,0,0.70))
+        drop-shadow(0 0 30px rgba(244,201,93,0.24));
+    }
+
+    .scene-hero.speaking .hero-npc::before {
+      animation: auraSpeak 1.25s ease-in-out infinite;
+      opacity: .9;
+    }
+
+    .scene-hero.speaking .hero-npc::after {
+      animation: glintSpeak 1s ease-in-out infinite;
+      opacity: .86;
+    }
+
+    .scene-hero.speaking::before {
+      animation-duration: 2.4s;
+      opacity: 1;
+    }
+
+    @keyframes characterPresence {
+      0%, 100% { filter: drop-shadow(0 34px 34px rgba(0,0,0,0.68)) drop-shadow(0 0 18px rgba(244,201,93,0.10)); }
+      50% { filter: drop-shadow(0 34px 34px rgba(0,0,0,0.70)) drop-shadow(0 0 34px rgba(244,201,93,0.20)); }
+    }
+
+    @keyframes characterSpeaking {
+      0%, 100% { filter: drop-shadow(0 34px 34px rgba(0,0,0,0.70)) drop-shadow(0 0 24px rgba(244,201,93,0.18)); }
+      45% { filter: drop-shadow(0 34px 34px rgba(0,0,0,0.72)) drop-shadow(0 0 42px rgba(244,201,93,0.32)); }
+    }
+
+    @keyframes sceneLightSweep {
+      0% { transform: translate3d(-4%, 0, 0); opacity: .46; }
+      100% { transform: translate3d(4%, 0, 0); opacity: .78; }
+    }
+
+    @keyframes auraPulse {
+      0%, 100% { transform: scale(.92); opacity: .54; }
+      50% { transform: scale(1); opacity: .76; }
+    }
+
+    @keyframes auraSpeak {
+      0%, 100% { transform: scale(.98); opacity: .78; }
+      50% { transform: scale(1.08); opacity: 1; }
+    }
+
+    @keyframes glintPulse {
+      0%, 100% { transform: scale(.82); opacity: .36; }
+      50% { transform: scale(1); opacity: .72; }
+    }
+
+    @keyframes glintSpeak {
+      0%, 100% { transform: scale(.9); opacity: .7; }
+      50% { transform: scale(1.16); opacity: 1; }
+    }
+
+    @keyframes emberDrift {
+      0% { transform: translate3d(0, 0, 0) scale(.7); opacity: 0; }
+      16% { opacity: .42; }
+      100% { transform: translate3d(28px, -170px, 0) scale(1.2); opacity: 0; }
+    }
+
+    .chat {
+      position: absolute;
+      left: 48px;
+      right: 48px;
+      bottom: 48px;
+      z-index: 9;
+      min-height: 0;
+      max-height: min(52vh, 430px);
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: var(--radius);
+      background: rgba(8, 13, 23, 0.54);
+      backdrop-filter: blur(18px) saturate(1.1);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.34);
+      overflow: hidden;
+      transition: background .28s ease, border-color .28s ease, box-shadow .28s ease;
+    }
+
+    .chat.puzzle-active {
+      background: rgba(8, 13, 23, 0.58);
+      border-color: rgba(255,255,255,0.14);
+    }
+
+    .messages {
+      flex: 1;
+      min-height: 0;
+      max-height: 238px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scroll-behavior: smooth;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      transition: max-height .28s ease, opacity .28s ease, padding .28s ease;
+    }
+
+    .chat.feedback-active .composer {
+      opacity: .28;
+      pointer-events: none;
+    }
+
+    .bubble-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      max-width: 860px;
+    }
+
+    .bubble-row.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .avatar {
+      flex: 0 0 auto;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.1);
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      color: var(--gold);
+      font-weight: 900;
+    }
+
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+    }
+
+    .bubble {
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: var(--radius);
+      padding: 13px 15px;
+      line-height: 1.58;
+      white-space: pre-wrap;
+      background: rgba(255,255,255,0.075);
+      backdrop-filter: blur(8px);
+      color: var(--text);
+      font-size: 15px;
+    }
+
+    .bubble-row.user .bubble {
+      color: #05111f;
+      background: linear-gradient(135deg, #e9f8ff, #b6fff5);
+      border-color: rgba(255,255,255,0.3);
+    }
+
+    .bubble.system {
+      align-self: center;
+      max-width: 820px;
+      color: #fef3c7;
+      background: rgba(244,201,93,0.13);
+      border-color: rgba(244,201,93,0.28);
+      text-align: center;
+    }
+
+    .choices {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .choice {
+      min-height: 36px;
+      border-radius: 999px;
+      padding: 8px 12px;
+      color: var(--text);
+      background: rgba(64,211,197,0.12);
+      border: 1px solid rgba(64,211,197,0.32);
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .choice:hover, .btn:hover {
+      filter: brightness(1.08);
+    }
+
+    .composer {
+      flex: 0 0 auto;
+      border-top: 1px solid var(--line);
+      background: rgba(3, 7, 18, 0.72);
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+      transition: opacity .28s ease;
+    }
+
+    .choice-panel {
+      display: grid;
+      gap: 10px;
+    }
+
+    .choice-panel-title {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .choice-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .choice-button {
+      min-height: 46px;
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      text-align: left;
+      color: var(--text);
+      background: rgba(64,211,197,0.12);
+      border: 1px solid rgba(64,211,197,0.30);
+      font-weight: 800;
+      line-height: 1.35;
+    }
+
+    .choice-button:hover,
+    .plague-item:hover,
+    .btn:hover {
+      filter: brightness(1.08);
+    }
+
+    .choice-button:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    .answer-board {
+      display: grid;
+      gap: 10px;
+    }
+
+    .answer-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .answer-input {
+      min-width: 0;
+      min-height: 46px;
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      color: var(--text);
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.18);
+      font: inherit;
+      font-weight: 800;
+      outline: none;
+    }
+
+    .answer-input:focus {
+      border-color: rgba(64,211,197,0.62);
+      box-shadow: 0 0 0 3px rgba(64,211,197,0.12);
+    }
+
+    .answer-input:disabled {
+      opacity: .55;
+    }
+
+    .plague-board {
+      display: grid;
+      gap: 10px;
+    }
+
+    .plague-list {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .plague-item {
+      min-height: 44px;
+      border-radius: var(--radius);
+      padding: 8px 9px;
+      color: var(--text);
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      font-weight: 800;
+      line-height: 1.28;
+      text-align: center;
+      cursor: grab;
+    }
+
+    .plague-item.dragging {
+      opacity: .48;
+      cursor: grabbing;
+    }
+
+    .plague-item.selected {
+      border-color: rgba(244,201,93,0.72);
+      background: rgba(244,201,93,0.18);
+    }
+
+    .plague-actions {
+      display: flex;
+      gap: 9px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .continue-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .typing {
+      display: inline-flex;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .typing span {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--gold);
+      animation: bounce 1s infinite ease-in-out;
+    }
+
+    .typing span:nth-child(2) { animation-delay: .16s; }
+    .typing span:nth-child(3) { animation-delay: .32s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: .45; }
+      40% { transform: translateY(-5px); opacity: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .scene-hero::before,
+      .hero-npc img,
+      .scene-hero.speaking .hero-npc img,
+      .typing span {
+        animation: none;
+      }
+    }
+
+    .ending {
+      display: grid;
+      gap: 12px;
+      justify-items: center;
+      padding: 22px;
+    }
+
+    .ending h2 {
+      margin: 0;
+      font-size: 32px;
+      letter-spacing: 0;
+    }
+
+    .ending p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+      max-width: 640px;
+      text-align: center;
+    }
+
+    @media (max-width: 860px) {
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+      .sidebar {
+        max-height: 224px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        padding: 16px;
+      }
+      .brand {
+        margin-bottom: 12px;
+      }
+      h1 {
+        font-size: 24px;
+      }
+      .scene-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        max-height: 84px;
+        overflow-y: auto;
+      }
+      .main {
+        min-height: 0;
+        padding: 14px;
+      }
+      .topline {
+        align-items: center;
+        flex-direction: row;
+        min-height: 48px;
+      }
+      .messages {
+        max-height: 170px;
+        padding: 12px;
+      }
+      .chat {
+        left: 24px;
+        right: 24px;
+        bottom: 24px;
+        max-height: min(48vh, 420px);
+      }
+      .chat.puzzle-active .messages {
+        max-height: 170px;
+      }
+      .hero-copy {
+        left: 14px;
+        right: 14px;
+        top: 14px;
+        bottom: auto;
+        max-width: 76%;
+      }
+      .hero-copy strong {
+        font-size: 27px;
+      }
+      .hero-copy p {
+        font-size: 12px;
+        line-height: 1.42;
+        max-width: 78%;
+      }
+      .hero-npc {
+        right: -34px;
+        width: 68%;
+        height: 102%;
+      }
+      .bubble-row {
+        max-width: 100%;
+      }
+      .avatar {
+        width: 34px;
+        height: 34px;
+      }
+      .choice-grid,
+      .answer-row,
+      .plague-list {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="eyebrow">Exodus Chat Escape</div>
+        <h1>모세와 함께 애굽을 탈출하라</h1>
+        <p class="intro">인물과 대화하고, 선택형·정렬형·단답형 문제를 풀며 다음 여정으로 이동하세요.</p>
+      </div>
+
+      <div class="meter">
+        <div class="meter-top"><span>진행도</span><strong id="progressText">0/6</strong></div>
+        <div class="bar"><span id="progressBar"></span></div>
+      </div>
+
+      <div id="sceneList" class="scene-list"></div>
+
+      <div class="side-actions">
+        <button id="startBtn" class="btn primary">게임 시작</button>
+        <button id="hintBtn" class="btn">단서 요청</button>
+        <button id="resetBtn" class="btn">처음부터</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="topline">
+        <div class="scene-title">
+          <strong id="sceneName">준비</strong>
+          <span id="sceneSub">출애굽 여정이 곧 시작됩니다.</span>
+        </div>
+        <div class="status" id="aiStatus">선택지 모드</div>
+      </div>
+
+      <section class="scene-hero" aria-label="현재 장면">
+        <div class="scene-life" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="hero-copy">
+          <span id="heroLabel">대기</span>
+          <strong id="heroTitle">출애굽 여정</strong>
+        <p id="heroText">게임을 시작하면 장면과 인물이 크게 표시되고, 아래 문제를 풀며 대화가 이어집니다.</p>
+        </div>
+        <div class="hero-npc">
+          <img id="heroNpc" class="active" src="assets/moses1.png" alt="NPC">
+          <img id="heroNpcNext" src="assets/moses1.png" alt="" aria-hidden="true">
+        </div>
+      </section>
+
+      <section class="chat" aria-label="출애굽 방탈출 게임">
+        <div id="messages" class="messages"></div>
+        <div class="composer">
+          <div id="interaction" class="choice-panel"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const scenes = [
+      {
+        id: "burningBush",
+        label: "1장",
+        title: "불붙은 떨기나무",
+        subtitle: "타지 않는 불꽃 앞에서 모세가 부르심을 듣는다.",
+        npc: "모세",
+        role: "부름받은 인도자",
+        bg: "bg-burning-bush.jpg",
+        portrait: "moses1.png",
+        avatar: "moses2.png",
+        frames: ["moses1.png", "moses2.png", "moses3.png", "moses4.png"],
+        prompt: "하나님이 모세에게 자신을 어떤 분이라고 말씀하셨는가?",
+        accepted: ["스스로 있는 자", "나는 스스로 있는 자다", "여호와"],
+        answerLabel: "스스로 있는 자",
+        atmosphere: "모래바람이 잠잠해지고, 꺼지지 않는 불꽃만 광야 한복판에서 흔들리고 있어.",
+        context: "모세는 자기 힘으로 돌아갈 수 없다고 느끼지만, 부르신 분의 이름이 두려움보다 앞서고 있어.",
+        hints: ["출애굽기 3장의 장면을 떠올려 봐.", "하나님은 자신의 존재를 직접 계시하셨어.", "핵심은 하나님이 스스로 계신 분이라는 고백이야."],
+        meaning: "구원 이야기는 모세의 능력이 아니라 하나님의 부르심에서 시작된다.",
+        choices: [
+          { label: "스스로 있는 자", correct: true, reply: "그래, 그 이름을 붙잡아야 해. 내가 애굽으로 가는 힘은 내 용기에서 나온 것이 아니라, 스스로 계신 분의 부르심에서 나와." },
+          { label: "애굽의 왕", reply: "바로는 강한 왕처럼 보이지만, 이 불꽃 앞에서 드러나는 이름은 바로의 이름이 아니야. 더 오래되고 더 근본적인 이름을 생각해 봐." },
+          { label: "광야의 안내자", reply: "길을 인도하시는 분은 맞지만, 지금 질문은 하나님이 자신을 어떤 이름으로 계시하셨는지를 묻고 있어." },
+          { label: "모세의 하나님", reply: "가까운 말이지만 문을 여는 표현은 조금 더 직접적이야. 불꽃 가운데 들려온 하나님의 자기 소개를 떠올려 봐." }
+        ]
+      },
+      {
+        id: "plagues",
+        label: "2장",
+        title: "바로의 궁전",
+        subtitle: "완고한 바로 앞에서 하나님의 능력이 드러난다.",
+        npc: "아론",
+        role: "모세의 동역자",
+        bg: "bg-pharaoh.jpg",
+        portrait: "aaron1.png",
+        avatar: "aaron2.png",
+        frames: ["aaron1.png", "aaron2.png", "aaron3.png", "aaron4.png"],
+        type: "order",
+        prompt: "10가지 재앙을 순서대로 드래그해 일렬로 맞추라.",
+        accepted: ["피, 장자의 죽음", "피 장자의 죽음", "피,장자의죽음", "피와 장자의 죽음"],
+        answerLabel: "피, 장자의 죽음",
+        plagueOrder: ["피", "개구리", "이", "파리", "가축의 죽음", "악성 종기", "우박", "메뚜기", "흑암", "장자의 죽음"],
+        atmosphere: "궁전 안은 화려하지만 숨이 막힐 만큼 차갑고, 바로의 침묵은 고집처럼 무겁게 내려앉아 있어.",
+        context: "재앙은 단순한 벌이 아니라, 애굽의 힘보다 하나님의 말씀이 크다는 사실을 드러내고 있어.",
+        hints: ["첫 재앙은 나일강과 관련되어 있어.", "마지막 재앙은 유월절 밤과 연결돼.", "처음은 물이 피로 변했고, 마지막은 장자의 죽음이었어."],
+        meaning: "바로가 붙잡아도 하나님의 구원 계획은 멈추지 않는다."
+      },
+      {
+        id: "passover",
+        label: "3장",
+        title: "유월절의 밤",
+        subtitle: "어린 양의 피가 구원의 표가 되는 밤.",
+        npc: "히브리 가족",
+        role: "구원을 기다리는 백성",
+        bg: "bg-passover.jpg",
+        portrait: "hebrew-family1.png",
+        avatar: "hebrew-family2.png",
+        frames: ["hebrew-family1.png", "hebrew-family2.png", "hebrew-family3.png", "hebrew-family4.png"],
+        type: "text",
+        prompt: "문설주와 인방에 무엇을 발라야 하는가?",
+        inputPlaceholder: "정답을 직접 입력하세요",
+        accepted: ["어린 양의 피", "양의 피"],
+        answerLabel: "어린 양의 피",
+        atmosphere: "집 안의 등불은 낮게 흔들리고, 가족들은 문밖의 밤을 조용히 의식하고 있어.",
+        context: "이 밤의 핵심은 강한 사람이 살아남는 것이 아니라, 말씀대로 표를 남긴 백성이 구별된다는 데 있어.",
+        hints: ["유월절의 핵심 표징을 생각해 봐.", "문에 남겨진 표가 심판을 지나가게 했어.", "어린 양과 연결된 붉은 표징이야."],
+        meaning: "유월절은 하나님께서 자기 백성을 구별하시고 구원하시는 사건이다.",
+        choices: [
+          { label: "어린 양의 피", correct: true, reply: "맞아. 그 피는 문 앞에 남겨진 믿음의 표였고, 그 밤에 백성이 구별되는 표징이 되었어." },
+          { label: "광야의 모래", reply: "광야는 곧 지나게 될 길이지만, 이 밤에 문에 남겨야 할 표는 모래가 아니야. 유월절 식탁의 어린 양을 떠올려 봐." },
+          { label: "무교병 조각", reply: "무교병은 중요한 음식이지만 문설주와 인방에 바르는 것은 아니야. 붉은 표징을 생각해 봐." },
+          { label: "등불의 기름", reply: "등불은 밤을 밝히지만, 심판이 지나가게 한 표는 다른 것이었어. 어린 양과 연결된 것을 찾아봐." }
+        ]
+      },
+      {
+        id: "departure",
+        label: "4장",
+        title: "급히 떠나라",
+        subtitle: "이스라엘 백성이 밤중에 애굽을 떠난다.",
+        npc: "애굽 병사",
+        role: "추격의 그림자",
+        bg: "bg-exodus-night.jpg",
+        portrait: "egypt-guard1.png",
+        avatar: "egypt-guard2.png",
+        frames: ["egypt-guard1.png", "egypt-guard2.png", "egypt-guard3.png", "egypt-guard4.png"],
+        type: "text",
+        prompt: "이스라엘 백성은 누룩 있는 빵이 아니라 어떤 빵을 가지고 떠났는가?",
+        inputPlaceholder: "음식 이름을 직접 입력하세요",
+        accepted: ["무교병", "누룩 없는 빵", "누룩없는빵"],
+        answerLabel: "무교병",
+        atmosphere: "발걸음은 급하고, 사람들은 뒤돌아볼 틈도 없이 짐을 움켜쥐고 있어.",
+        context: "준비가 완벽해서 떠나는 것이 아니라, 떠나라는 말씀을 믿고 급히 움직이는 장면이야.",
+        hints: ["너무 급히 떠나야 해서 반죽을 오래 기다릴 수 없었어.", "누룩이 들어가지 않은 빵이야.", "유월절 식탁에도 등장하는 음식이야."],
+        meaning: "출애굽은 완벽하게 준비된 여행이 아니라 말씀에 대한 빠른 순종이었다.",
+        choices: [
+          { label: "무교병", correct: true, reply: "그래. 기다릴 틈 없이 떠나는 길이었기에 누룩 없는 빵을 들고 나섰어. 순종은 때로 완벽한 준비보다 빠른 결단을 요구해." },
+          { label: "만나", reply: "만나는 광야에서 하나님이 먹이신 양식이야. 지금은 애굽을 막 떠나는 밤, 급히 챙긴 빵을 묻고 있어." },
+          { label: "성전의 떡", reply: "성전의 떡은 이 장면보다 뒤의 이야기와 연결돼. 지금은 누룩을 기다릴 시간이 없었던 출발의 순간이야." },
+          { label: "포도송이", reply: "포도송이는 약속의 땅을 떠올리게 하지만, 이 밤에 손에 들고 떠난 것은 급히 구운 빵이야." }
+        ]
+      },
+      {
+        id: "wilderness",
+        label: "5장",
+        title: "광야의 길",
+        subtitle: "낯선 길에서도 낮과 밤의 인도가 이어진다.",
+        npc: "광야 안내자",
+        role: "길을 기억하게 돕는 사람",
+        bg: "bg-wilderness.jpg",
+        portrait: "moses1.png",
+        avatar: "moses2.png",
+        frames: ["moses1.png", "moses2.png", "moses3.png", "moses4.png"],
+        type: "text",
+        prompt: "낮과 밤에 이스라엘을 인도한 두 표징을 순서대로 답하라.",
+        inputPlaceholder: "예: 낮의 표징, 밤의 표징",
+        accepted: ["구름기둥, 불기둥", "구름기둥 불기둥", "구름 기둥, 불 기둥", "구름기둥과 불기둥"],
+        answerLabel: "구름기둥, 불기둥",
+        atmosphere: "광야는 넓고 방향은 흐릿하지만, 백성의 눈앞에는 낮과 밤을 잇는 표징이 서 있어.",
+        context: "길을 다 아는 사람이 앞장선 것이 아니라, 하나님이 보이시는 표징을 따라가는 여정이야.",
+        hints: ["낮에는 뜨거운 광야와 관련된 표징이야.", "밤에는 어둠 속에서 빛나는 표징이야.", "낮에는 구름, 밤에는 불이 백성을 인도했어."],
+        meaning: "광야는 막막한 길이지만, 하나님이 함께하시는 길이기도 하다.",
+        choices: [
+          { label: "구름기둥, 불기둥", correct: true, reply: "맞아. 낮에는 구름기둥, 밤에는 불기둥이 백성 앞에 있었어. 길을 다 알지 못해도 인도하심은 사라지지 않았지." },
+          { label: "불기둥, 구름기둥", reply: "두 표징은 맞지만 순서가 바뀌었어. 뜨거운 낮과 어두운 밤을 차례로 떠올려 봐." },
+          { label: "만나, 메추라기", reply: "그것들은 광야의 공급과 관련돼. 지금 질문은 길을 보여 준 표징 두 가지를 순서대로 묻고 있어." },
+          { label: "지팡이, 반석", reply: "그 장면도 광야와 이어지지만, 백성을 낮과 밤에 인도한 표징은 하늘과 빛에 가까워." }
+        ]
+      },
+      {
+        id: "redSea",
+        label: "6장",
+        title: "홍해 앞에서",
+        subtitle: "뒤에는 군대, 앞에는 바다. 길은 아직 보이지 않는다.",
+        npc: "모세",
+        role: "홍해 앞에 선 인도자",
+        bg: "bg-red-sea.jpg",
+        portrait: "moses1.png",
+        avatar: "moses2.png",
+        frames: ["moses1.png", "moses2.png", "moses3.png", "moses4.png"],
+        type: "text",
+        prompt: "모세가 바다 위로 내민 것은 무엇인가?",
+        inputPlaceholder: "손에 든 물건을 입력하세요",
+        accepted: ["지팡이", "모세의 지팡이"],
+        answerLabel: "지팡이",
+        atmosphere: "뒤에서는 병거 소리가 가까워지고, 앞에서는 검은 바다가 길을 막고 있어.",
+        context: "모세의 손에 있는 것은 평범해 보이지만, 하나님의 명령 앞에서는 길을 여는 순종의 표시가 돼.",
+        hints: ["모세가 부르심을 받을 때부터 손에 있던 물건이야.", "여러 표징의 도구로 쓰였어.", "막대기처럼 보이지만 하나님의 명령 앞에서 길을 여는 도구가 되었어."],
+        meaning: "길이 없어 보이는 곳에 하나님께서 길을 내신다.",
+        choices: [
+          { label: "지팡이", correct: true, reply: "그래. 내 손의 지팡이는 평범해 보였지만, 하나님의 명령 앞에서 바다 위로 들려 길을 여는 표가 되었어." },
+          { label: "칼", reply: "뒤쫓아오는 군대 앞에서 칼이 필요해 보일 수 있어. 하지만 이 장면은 전쟁의 무기가 아니라 순종의 표를 묻고 있어." },
+          { label: "횃불", reply: "횃불은 어둠을 밝히지만 홍해 위로 내민 것은 아니야. 모세가 처음 부르심을 받을 때 손에 있던 것을 생각해 봐." },
+          { label: "언약궤", reply: "언약궤는 뒤의 역사에서 중요하게 등장해. 홍해 앞 모세의 손에 있던 것은 더 단순한 물건이야." }
+        ]
+      }
+    ];
+
+    const state = {
+      started: false,
+      current: 0,
+      history: [],
+      hintCount: {},
+      loading: false,
+      completed: false,
+      avatarFrames: [],
+      avatarFrameIndex: 0,
+      avatarTimer: null,
+      avatarSpeaking: false,
+      localTurns: {}
+    };
+
+    const AVATAR_SPEED = {
+      idle: 2600,
+      speaking: 1700,
+      crossfade: 900
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function normalize(value) {
+      return String(value || "")
+        .toLowerCase()
+        .replace(/\s+/g, "")
+        .replace(/[,.，、]/g, ",")
+        .trim();
+    }
+
+    function escapeAttribute(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function pick(items) {
+      return items[Math.floor(Math.random() * items.length)];
+    }
+
+    function classifyMessage(text) {
+      const lower = text.toLowerCase();
+      if (/^(\/answer|정답[:：]?)/i.test(text.trim())) return "answer";
+      if (/(힌트|단서|도움|모르겠|막혔|어려|살짝|조금만)/.test(lower)) return "hint";
+      if (/(상황|무슨 일|뭐가 일어|어디|여기|설명|배경|분위기|누구|너는)/.test(lower)) return "situation";
+      if (/(본문|성경|출애굽|말씀|의미|왜|하나님|신앙|교훈)/.test(lower)) return "context";
+      if (/(무서|두려|불안|급해|긴장|괜찮|감정|기분)/.test(lower)) return "emotion";
+      if (/(해야|무엇|뭐해|어떻게|목표|문제)/.test(lower)) return "goal";
+      if (/(답|정답|맞아|이거|혹시)/.test(lower)) return "guess";
+      return "chat";
+    }
+
+    function localTurn(scene) {
+      state.localTurns[scene.id] = (state.localTurns[scene.id] || 0) + 1;
+      return state.localTurns[scene.id];
+    }
+
+    function nearAnswer(scene, text) {
+      const compact = normalize(text);
+      if (!compact || compact.length < 2) return false;
+      return scene.accepted.some((answer) => {
+        const target = normalize(answer);
+        return target.includes(compact) || compact.includes(target.slice(0, Math.max(2, Math.floor(target.length * .55))));
+      });
+    }
+
+    function currentScene() {
+      return scenes[state.current];
+    }
+
+    function pulseNpc(duration = 1600) {
+      const hero = document.querySelector(".scene-hero");
+      if (!hero) return;
+      hero.classList.add("speaking");
+      state.avatarSpeaking = true;
+      restartAvatarLoop();
+      window.clearTimeout(pulseNpc.timer);
+      pulseNpc.timer = window.setTimeout(() => {
+        hero.classList.remove("speaking");
+        state.avatarSpeaking = false;
+        restartAvatarLoop();
+      }, duration);
+    }
+
+    function setBackground(scene) {
+      const url = scene ? `url("assets/${scene.bg}")` : `url("assets/bg-exodus-night.jpg")`;
+      $("app").style.setProperty("--scene-image", url);
+    }
+
+    function stopAvatarLoop() {
+      window.clearInterval(state.avatarTimer);
+      state.avatarTimer = null;
+      window.clearTimeout(stopAvatarLoop.fadeTimer);
+    }
+
+    function activeAvatarImage() {
+      return document.querySelector(".hero-npc img.active") || $("heroNpc");
+    }
+
+    function inactiveAvatarImage() {
+      return activeAvatarImage().id === "heroNpc" ? $("heroNpcNext") : $("heroNpc");
+    }
+
+    function setAvatarFrame(frame, options = {}) {
+      const src = `assets/${frame}`;
+      const active = activeAvatarImage();
+      const inactive = inactiveAvatarImage();
+
+      if (options.instant || active.src.endsWith(src)) {
+        active.src = src;
+        active.alt = options.alt || active.alt || "NPC";
+        inactive.src = src;
+        inactive.classList.remove("active");
+        return;
+      }
+
+      inactive.src = src;
+      inactive.alt = options.alt || "";
+      inactive.classList.remove("active");
+      inactive.getBoundingClientRect();
+      inactive.classList.add("active");
+      active.classList.remove("active");
+
+      window.clearTimeout(stopAvatarLoop.fadeTimer);
+      stopAvatarLoop.fadeTimer = window.setTimeout(() => {
+        active.src = src;
+      }, AVATAR_SPEED.crossfade);
+    }
+
+    function restartAvatarLoop() {
+      stopAvatarLoop();
+      if (!state.avatarFrames.length) return;
+
+      const delay = state.avatarSpeaking ? AVATAR_SPEED.speaking : AVATAR_SPEED.idle;
+      state.avatarTimer = window.setInterval(() => {
+        state.avatarFrameIndex = (state.avatarFrameIndex + 1) % state.avatarFrames.length;
+        setAvatarFrame(state.avatarFrames[state.avatarFrameIndex]);
+      }, delay);
+    }
+
+    function preloadFrames(frames) {
+      return Promise.all(frames.map((frame) => new Promise((resolve) => {
+        const image = new Image();
+        image.onload = () => resolve(true);
+        image.onerror = () => resolve(false);
+        image.src = `assets/${frame}`;
+      })));
+    }
+
+    async function setHeroAvatar(scene) {
+      stopAvatarLoop();
+      state.avatarSpeaking = false;
+      state.avatarFrames = [];
+      state.avatarFrameIndex = 0;
+      setAvatarFrame(scene.portrait, { instant: true, alt: scene.npc });
+
+      if (!scene.frames?.length) return;
+
+      const loaded = await preloadFrames(scene.frames);
+      if (!loaded.every(Boolean)) return;
+
+      state.avatarFrames = scene.frames;
+      setAvatarFrame(state.avatarFrames[0], { instant: true, alt: scene.npc });
+      restartAvatarLoop();
+    }
+
+    function renderSidebar() {
+      $("progressText").textContent = `${Math.min(state.current, scenes.length)}/${scenes.length}`;
+      $("progressBar").style.width = `${(Math.min(state.current, scenes.length) / scenes.length) * 100}%`;
+      $("sceneList").innerHTML = scenes.map((scene, index) => {
+        const cls = index < state.current ? "done" : index === state.current && state.started ? "active" : "";
+        const mark = index < state.current ? "완료" : index === state.current && state.started ? "진행" : "대기";
+        return `<div class="scene-pill ${cls}"><span>${scene.label} · ${scene.title}</span><strong>${mark}</strong></div>`;
+      }).join("");
+    }
+
+    function speakerAvatar(scene) {
+      return `<div class="avatar"><img src="assets/${scene.avatar || scene.portrait}" alt="${scene.npc}"></div>`;
+    }
+
+    function addMessage(role, text, options = []) {
+      const box = $("messages");
+      if (role === "system") {
+        const div = document.createElement("div");
+        div.className = "bubble system";
+        div.textContent = text;
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
+        return div;
+      }
+
+      const scene = currentScene() || scenes[scenes.length - 1];
+      const row = document.createElement("div");
+      row.className = `bubble-row ${role}`;
+      row.innerHTML = role === "user"
+        ? `<div class="avatar">나</div><div class="bubble"></div>`
+        : `${speakerAvatar(scene)}<div class="bubble"></div>`;
+      row.querySelector(".bubble").textContent = text;
+
+      if (options.length) {
+        const choices = document.createElement("div");
+        choices.className = "choices";
+        options.forEach((option) => {
+          const btn = document.createElement("button");
+          btn.className = "choice";
+          btn.textContent = option.label;
+          btn.onclick = option.action;
+          choices.appendChild(btn);
+        });
+        row.querySelector(".bubble").appendChild(choices);
+      }
+
+      box.appendChild(row);
+      box.scrollTop = box.scrollHeight;
+      if (role === "npc") {
+        pulseNpc(Math.min(3200, Math.max(1200, text.length * 42)));
+      }
+      return row;
+    }
+
+    function scrollChatToBottom() {
+      const box = $("messages");
+      requestAnimationFrame(() => {
+        box.scrollTop = box.scrollHeight;
+      });
+    }
+
+    function shuffle(items) {
+      return [...items].sort(() => Math.random() - 0.5);
+    }
+
+    function setInteraction(html = "") {
+      $("interaction").innerHTML = html;
+    }
+
+    function setSolvingMode(active) {
+      document.querySelector(".chat")?.classList.toggle("puzzle-active", active);
+    }
+
+    function setFeedbackMode(active) {
+      document.querySelector(".chat")?.classList.toggle("feedback-active", active);
+    }
+
+    function lockInteraction() {
+      $("interaction").querySelectorAll("button").forEach((button) => {
+        button.disabled = true;
+      });
+      $("interaction").querySelectorAll("input").forEach((input) => {
+        input.disabled = true;
+      });
+      $("interaction").querySelectorAll("[draggable='true']").forEach((item) => {
+        item.draggable = false;
+      });
+    }
+
+    function renderInteraction() {
+      if (!state.started || state.completed || state.loading) {
+        setInteraction("");
+        setSolvingMode(false);
+        setFeedbackMode(false);
+        return;
+      }
+
+      const scene = currentScene();
+      if (scene.type === "order") {
+        renderPlaguePuzzle(scene);
+        return;
+      }
+      if (scene.type === "text") {
+        renderTextPuzzle(scene);
+        return;
+      }
+
+      renderChoicePuzzle(scene);
+    }
+
+    function renderChoicePuzzle(scene) {
+      setSolvingMode(true);
+      setFeedbackMode(false);
+      setInteraction(`
+        <p class="choice-panel-title">${scene.prompt}</p>
+        <div class="choice-grid"></div>
+      `);
+
+      const grid = $("interaction").querySelector(".choice-grid");
+      scene.choices.forEach((choice) => {
+        const button = document.createElement("button");
+        button.className = "choice-button";
+        button.textContent = choice.label;
+        button.onclick = () => chooseAnswer(scene, choice);
+        grid.appendChild(button);
+      });
+    }
+
+    function isAcceptedAnswer(scene, value) {
+      const compact = normalize(value);
+      return scene.accepted.some((answer) => normalize(answer) === compact);
+    }
+
+    function renderTextPuzzle(scene, value = "") {
+      setSolvingMode(true);
+      setFeedbackMode(false);
+      setInteraction(`
+        <form class="answer-board" id="answerForm">
+          <p class="choice-panel-title">${scene.prompt}</p>
+          <div class="answer-row">
+            <input
+              class="answer-input"
+              id="answerInput"
+              name="answer"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="${scene.inputPlaceholder || "정답을 직접 입력하세요"}"
+              value="${escapeAttribute(value)}"
+              aria-label="정답 입력"
+            >
+            <button class="btn" type="button" id="answerHintBtn">단서</button>
+            <button class="btn primary" type="submit">확인</button>
+          </div>
+        </form>
+      `);
+
+      const input = $("answerInput");
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+      $("answerHintBtn").onclick = requestHint;
+      $("answerForm").onsubmit = (event) => {
+        event.preventDefault();
+        checkTextAnswer(scene, input.value);
+      };
+    }
+
+    function checkTextAnswer(scene, value) {
+      const answer = String(value || "").trim();
+      if (!answer) {
+        $("answerInput")?.focus();
+        addMessage("npc", "빈칸으로는 문이 열리지 않아. 장면 속 단서를 떠올려 직접 적어 봐.");
+        return;
+      }
+
+      lockInteraction();
+      setFeedbackMode(true);
+      addMessage("user", answer);
+      window.setTimeout(() => {
+        if (isAcceptedAnswer(scene, answer)) {
+          addMessage("npc", `맞아. 정답은 ${scene.answerLabel}이야.\n\n${scene.meaning}`);
+          renderNextButton(scene);
+          return;
+        }
+
+        if (nearAnswer(scene, answer)) {
+          addMessage("npc", "거의 가까워. 핵심 단어는 잡았지만, 이 장면의 표현을 조금 더 정확히 적어 봐.");
+        } else {
+          const used = state.hintCount[scene.id] || 0;
+          const hint = scene.hints[Math.min(used, scene.hints.length - 1)];
+          state.hintCount[scene.id] = used + 1;
+          addMessage("npc", `아직 문이 열리지 않아.\n\n단서: ${hint}`);
+        }
+        window.setTimeout(() => renderTextPuzzle(scene, answer), 1500);
+      }, 360);
+    }
+
+    function renderNextButton(scene) {
+      setSolvingMode(false);
+      setFeedbackMode(false);
+      setInteraction(`
+        <div class="continue-actions">
+          <button class="btn primary" id="nextSceneBtn">다음</button>
+        </div>
+      `);
+      $("nextSceneBtn").onclick = (event) => {
+        event.currentTarget.disabled = true;
+        nextScene(scene);
+      };
+    }
+
+    function chooseAnswer(scene, choice) {
+      if (state.loading) return;
+      lockInteraction();
+      setFeedbackMode(true);
+      addMessage("user", choice.label);
+      window.setTimeout(() => {
+        addMessage("npc", choice.reply);
+        if (choice.correct) {
+          addMessage("npc", scene.meaning);
+          renderNextButton(scene);
+        } else {
+          window.setTimeout(renderInteraction, 1200);
+        }
+      }, 360);
+    }
+
+    function renderPlaguePuzzle(scene, initialItems = shuffle(scene.plagueOrder)) {
+      const items = initialItems;
+      setSolvingMode(true);
+      setFeedbackMode(false);
+      setInteraction(`
+        <div class="plague-board">
+          <p class="choice-panel-title">${scene.prompt} 터치 화면에서는 두 항목을 차례로 눌러 위치를 바꿀 수 있습니다.</p>
+          <div class="plague-list" id="plagueList"></div>
+          <div class="plague-actions">
+            <button class="btn" id="plagueHintBtn">단서</button>
+            <button class="btn primary" id="plagueCheckBtn">확인</button>
+          </div>
+        </div>
+      `);
+
+      const list = $("plagueList");
+      items.forEach((item) => list.appendChild(createPlagueItem(item)));
+      list.addEventListener("dragover", handlePlagueDragOver);
+      $("plagueHintBtn").onclick = requestHint;
+      $("plagueCheckBtn").onclick = checkPlagueOrder;
+    }
+
+    function createPlagueItem(label) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "plague-item";
+      item.textContent = label;
+      item.draggable = true;
+      item.addEventListener("dragstart", () => item.classList.add("dragging"));
+      item.addEventListener("dragend", () => item.classList.remove("dragging"));
+      item.addEventListener("click", () => swapSelectedPlagues(item));
+      return item;
+    }
+
+    function swapSelectedPlagues(item) {
+      const list = $("plagueList");
+      const selected = list.querySelector(".plague-item.selected");
+      if (!selected) {
+        item.classList.add("selected");
+        return;
+      }
+      if (selected === item) {
+        item.classList.remove("selected");
+        return;
+      }
+
+      const placeholder = document.createElement("span");
+      list.insertBefore(placeholder, selected);
+      list.insertBefore(selected, item);
+      list.insertBefore(item, placeholder);
+      placeholder.remove();
+      selected.classList.remove("selected");
+    }
+
+    function handlePlagueDragOver(event) {
+      event.preventDefault();
+      const list = event.currentTarget;
+      const dragging = list.querySelector(".dragging");
+      if (!dragging) return;
+
+      const afterElement = [...list.querySelectorAll(".plague-item:not(.dragging)")].find((item) => {
+        const box = item.getBoundingClientRect();
+        return event.clientY < box.top + box.height / 2 && event.clientX < box.right;
+      });
+
+      if (afterElement) {
+        list.insertBefore(dragging, afterElement);
+      } else {
+        list.appendChild(dragging);
+      }
+    }
+
+    function checkPlagueOrder() {
+      const scene = currentScene();
+      const chosen = [...$("plagueList").querySelectorAll(".plague-item")].map((item) => item.textContent);
+      const ok = chosen.every((item, index) => item === scene.plagueOrder[index]);
+      lockInteraction();
+      setFeedbackMode(true);
+      addMessage("user", chosen.join(" → "));
+      window.setTimeout(() => {
+        if (ok) {
+          addMessage("npc", `맞아. 재앙의 순서가 바로의 완고함과 하나님의 구원 계획을 차례로 드러내고 있어.\n\n${scene.meaning}`);
+          renderNextButton(scene);
+        } else {
+          addMessage("npc", buildPlagueFeedback(scene, chosen));
+          window.setTimeout(() => renderPlaguePuzzle(scene, chosen), 2600);
+        }
+      }, 360);
+    }
+
+    function buildPlagueFeedback(scene, chosen) {
+      const wrong = chosen
+        .map((item, index) => ({ item, index, expected: scene.plagueOrder[index] }))
+        .filter(({ item, expected }) => item !== expected);
+
+      if (!wrong.length) return "순서는 거의 맞았어. 다시 한번 확인해 보자.";
+
+      const details = wrong.slice(0, 3).map(({ item, index, expected }) => {
+        const correctPosition = scene.plagueOrder.indexOf(item) + 1;
+        return `${index + 1}번째에는 "${expected}"가 와야 하는데 지금 "${item}"가 있어. "${item}"는 원래 ${correctPosition}번째 재앙이야.`;
+      });
+
+      const more = wrong.length > 3
+        ? `\n\n그 밖에도 ${wrong.length - 3}곳이 더 어긋나 있어. 앞에서부터 차례로 고치면 뒤쪽도 함께 정리될 수 있어.`
+        : "";
+
+      return `아직 순서가 맞지 않아.\n\n${details.join("\n")}${more}`;
+    }
+
+    function setSceneHeader(scene) {
+      $("sceneName").textContent = scene.title;
+      $("sceneSub").textContent = scene.subtitle;
+      $("aiStatus").textContent = scene.type === "text" ? "단답형 모드" : scene.type === "order" ? "정렬 모드" : "선택지 모드";
+      $("heroLabel").textContent = `${scene.label} · ${scene.npc}`;
+      $("heroTitle").textContent = scene.title;
+      $("heroText").textContent = scene.atmosphere || scene.subtitle;
+      setHeroAvatar(scene);
+      setBackground(scene);
+    }
+
+    function fallbackReply(scene, userText) {
+      const intent = classifyMessage(userText);
+      const turn = localTurn(scene);
+      if (nearAnswer(scene, userText) && intent !== "situation" && intent !== "context") {
+        return pick([
+          `그 방향은 꽤 가까워. 다만 이 문은 조금 더 정확한 표현을 요구하고 있어. 장면에서 반복해서 강조되는 말을 떠올려 봐.`,
+          `좋아, 핵심 근처까지 왔어. 이제 질문이 묻는 표현을 조금 더 분명하게 붙잡아 봐.`,
+          `그 말은 이 장면과 연결돼 있어. 하지만 아직 문이 완전히 열리지는 않았어. 본문에서 쓰인 핵심 단어를 더 가까이 찾아봐.`
+        ]);
+      }
+      if (intent === "situation") {
+        return pick([
+          `${scene.atmosphere}\n\n나는 지금 이 순간이 단순한 퀴즈처럼 지나가지 않기를 바라. 먼저 이 장면 안에서 무엇이 두렵고 무엇이 희망인지 살펴봐.`,
+          `${scene.title}의 한가운데에 서 있다고 생각해 봐. ${scene.context}\n\n그러니 답을 찾기 전에, 이 장면이 무엇을 드러내는지 먼저 붙잡아야 해.`,
+          `${scene.atmosphere}\n\n지금 네가 물은 건 중요해. 상황을 이해하면 문제의 답도 암기처럼 튀어나오는 게 아니라 장면 안에서 자연스럽게 보일 거야.`,
+          `${scene.npc}인 내가 보기에도 이 장면은 쉽게 지나갈 수 없어. ${scene.subtitle}\n\n먼저 눈앞의 풍경을 보고, 그다음 질문을 붙잡아 보자.`
+        ]);
+      }
+      if (intent === "context") {
+        return pick([
+          `${scene.context}\n\n이 장면은 단순히 다음 단계로 넘어가기 위한 장치가 아니야. 하나님이 어떤 분이신지, 백성이 무엇을 믿고 움직였는지를 보여 주고 있어.`,
+          `본문의 흐름에서 보면, ${scene.meaning}\n\n그래서 지금 문제도 지식 하나를 맞히는 것보다 그 의미를 붙잡게 하려는 거야.`,
+          `출애굽 이야기는 계속 같은 질문을 던져. 사람의 힘이 아니라 하나님의 말씀을 믿고 움직일 수 있느냐는 질문이지.`
+        ]);
+      }
+      if (intent === "emotion") {
+        return pick([
+          `두려운 게 당연해. 이 장면의 사람들도 확신만 가득해서 움직인 게 아니라, 말씀 하나를 붙잡고 다음 걸음을 내디뎠어.`,
+          `나도 이 순간이 가볍게 느껴지지 않아. 하지만 두려움이 사라져야 길이 열리는 건 아니야. 말씀을 붙잡고 움직일 때 길이 보이기 시작하지.`,
+          `불안함을 무시하지 않아도 돼. 오히려 그 불안 속에서 무엇을 의지할지 드러나는 장면이야.`
+        ]);
+      }
+      if (intent === "hint") {
+        const used = state.hintCount[scene.id] || 0;
+        const hint = scene.hints[Math.min(used, scene.hints.length - 1)];
+        state.hintCount[scene.id] = used + 1;
+        return pick([
+          `${hint}\n\n하지만 정답을 외워서 맞히기보다, 왜 그 단서가 이 장면에서 중요했는지 같이 생각해 봐.`,
+          `좋아, 조금만 더 가까이 가 보자. ${hint}`,
+          `${hint}\n\n이 단서가 보이면 문이 열릴 거야.`
+        ]);
+      }
+      if (intent === "goal") {
+        return pick([
+          `지금 해야 할 일은 장면 안에서 핵심 단서를 찾는 거야.\n\n${scene.prompt}`,
+          `서두르지 마. 먼저 상황을 보고, 그다음 질문을 붙잡아.\n\n${scene.prompt}`,
+          `목표는 문을 억지로 여는 게 아니라, 이 장면의 의미를 이해해서 다음 길을 찾는 거야. 지금 열쇠는 이 질문 안에 있어: ${scene.prompt}`
+        ]);
+      }
+      if (intent === "guess") {
+        return pick([
+          scene.type === "text"
+            ? `답을 바로 확인하고 싶다면 아래 입력칸에 직접 적어 봐. 내가 문이 열리는지 확인해 줄게.`
+            : `답을 바로 확인하고 싶다면 아래 선택지에서 가장 가까운 것을 골라 봐. 내가 문이 열리는지 확인해 줄게.`,
+          scene.type === "text"
+            ? `혹시 떠오른 말이 있다면 아래 입력칸에 적어 봐. 틀려도 이 장면 안에서 다시 길을 찾으면 돼.`
+            : `혹시 떠오른 말이 있다면 아래 선택지를 살펴봐. 틀려도 이 장면 안에서 다시 길을 찾으면 돼.`,
+          `네가 떠올린 단어가 있다면 그게 단서일 수 있어. 다만 나는 정답을 대신 말해 주기보다는 네가 붙잡도록 도울게.`
+        ]);
+      }
+      return pick([
+        scene.type === "text"
+          ? `네 말을 들으니 이 장면이 더 가까워지는 것 같아. ${scene.atmosphere}\n\n아래 입력칸에 이 장면의 핵심 답을 직접 적어 봐.`
+          : `네 말을 들으니 이 장면이 더 가까워지는 것 같아. ${scene.atmosphere}\n\n아래 선택지 중 이 장면과 가장 맞는 답을 골라 봐.`,
+        `나는 ${scene.npc}. 지금 우리가 서 있는 곳은 ${scene.title}이야.\n\n${scene.context}`,
+        `그 질문을 붙잡고 조금만 더 안으로 들어가 보자. 이 장면은 "${scene.prompt}"라는 질문으로 너를 이끌고 있어.`,
+        turn % 2 === 0
+          ? `좋아, 다시 천천히 보자. ${scene.atmosphere}\n\n단서가 필요하면 왼쪽의 단서 요청을 눌러도 돼.`
+          : `이 장면은 서두르면 그냥 암호처럼 보일 수 있어. 하지만 자세히 보면 사람들의 두려움과 하나님의 인도가 함께 놓여 있어.`
+      ]);
+    }
+
+    function introduceScene() {
+      const scene = currentScene();
+      state.history = [];
+      setSceneHeader(scene);
+      renderSidebar();
+      addMessage("system", `${scene.label} · ${scene.title}`);
+      addMessage("npc", `${scene.atmosphere}\n\n${scene.context}\n\n준비가 되면 이 질문을 붙잡아 봐.\n${scene.prompt}`);
+      renderInteraction();
+      scrollChatToBottom();
+    }
+
+    function startGame() {
+      state.started = true;
+      state.completed = false;
+      state.current = 0;
+      state.hintCount = {};
+      $("messages").innerHTML = "";
+      setInteraction("");
+      introduceScene();
+    }
+
+    function nextScene(scene = currentScene()) {
+      setSolvingMode(false);
+      setFeedbackMode(false);
+      setInteraction("");
+      addMessage("system", `${scene.title} 통과. 다음 장면으로 이동합니다.`);
+      state.current += 1;
+      if (state.current >= scenes.length) {
+        setInteraction("");
+        finishGame();
+        return;
+      }
+      setTimeout(introduceScene, 900);
+    }
+
+    function finishGame() {
+      state.completed = true;
+      renderSidebar();
+      setBackground({ bg: "bg-ending.jpg" });
+      $("sceneName").textContent = "탈출 성공";
+      $("sceneSub").textContent = "홍해를 건너 새로운 길이 열렸습니다.";
+      $("heroLabel").textContent = "ENDING";
+      $("heroTitle").textContent = "홍해를 건넜다";
+      $("heroText").textContent = "두려움의 자리에서 믿음의 길로, 백성은 마침내 바다 사이를 지나갑니다.";
+      setHeroAvatar({ npc: "모세", portrait: "moses1.png", frames: ["moses1.png", "moses2.png", "moses3.png", "moses4.png"] });
+      addMessage("npc", "바다가 갈라지고 길이 열렸다. 우리가 건넌 것은 단지 물길이 아니라, 두려움에서 믿음으로 넘어가는 길이었다.");
+      addMessage("system", "게임 완료. 처음부터 다시 하려면 왼쪽의 '처음부터'를 누르세요.");
+    }
+
+    function requestHint() {
+      if (!state.started || state.completed) return;
+      const scene = currentScene();
+      setFeedbackMode(true);
+      addMessage("npc", fallbackReply(scene, "힌트"));
+      window.setTimeout(() => {
+        if (state.started && !state.completed && $("interaction").innerHTML.trim()) {
+          setSolvingMode(true);
+          setFeedbackMode(false);
+        }
+      }, 1800);
+    }
+
+    function resetGame() {
+      $("messages").innerHTML = "";
+      state.started = false;
+      state.completed = false;
+      state.current = 0;
+      state.history = [];
+      state.hintCount = {};
+      state.loading = false;
+      setSolvingMode(false);
+      setFeedbackMode(false);
+      $("sceneName").textContent = "준비";
+      $("sceneSub").textContent = "출애굽 여정이 곧 시작됩니다.";
+      $("aiStatus").textContent = "선택지 모드";
+      $("heroLabel").textContent = "대기";
+      $("heroTitle").textContent = "출애굽 여정";
+      $("heroText").textContent = "게임을 시작하면 장면과 인물이 크게 표시되고, 아래 문제를 풀며 대화가 이어집니다.";
+      setHeroAvatar({ npc: "NPC", portrait: "moses1.png", frames: ["moses1.png", "moses2.png", "moses3.png", "moses4.png"] });
+      setBackground({ bg: "bg-exodus-night.jpg" });
+      renderSidebar();
+      setInteraction('<p class="choice-panel-title">게임 시작을 누르면 첫 장면의 문제가 열립니다.</p>');
+      addMessage("system", "게임 시작을 누르면 출애굽 방탈출이 시작됩니다.");
+      addMessage("npc", "나는 이 여정의 첫 장면에서 너를 기다리고 있어. 준비가 되면 시작해.");
+    }
+
+    function init() {
+      resetGame();
+
+      $("startBtn").onclick = startGame;
+      $("hintBtn").onclick = requestHint;
+      $("resetBtn").onclick = resetGame;
+    }
+
+    init();
+  </script>
+</body>
+</html>
