@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "dev": "node local-server.js",
+    "check": "node --check local-server.js"
+  }
+}
