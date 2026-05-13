@@ -287,9 +287,17 @@ def fetch_stock_prices(
             normalized = _read_daily_cache(legacy_cache)
         else:
             raw = client.fetch_stock_daily(market_key, bas_dd)
-            normalized = normalize_stock_daily(raw, market=market_key, tickers=tickers)
+            normalized = normalize_stock_daily(raw, market=market_key, tickers=None)
             if daily_cache is not None:
                 _write_daily_cache(normalized, daily_cache)
+        wanted = {str(ticker).replace(".KS", "").replace(".KQ", "").zfill(6) for ticker in tickers}
+        if not normalized.empty and wanted.difference(set(normalized["ticker"].astype(str).str.zfill(6))):
+            raw = client.fetch_stock_daily(market_key, bas_dd)
+            normalized = normalize_stock_daily(raw, market=market_key, tickers=None)
+            if daily_cache is not None:
+                _write_daily_cache(normalized, daily_cache)
+        if not normalized.empty:
+            normalized = normalized[normalized["ticker"].isin(wanted)]
         if not normalized.empty:
             frames.append(normalized)
         if progress_every and (index == 1 or index % progress_every == 0 or index == total):

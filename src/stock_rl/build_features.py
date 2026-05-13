@@ -13,8 +13,12 @@ FEATURE_COLUMNS = [
     "return_1d",
     "return_5d",
     "return_20d",
+    "return_60d",
+    "return_120d",
     "ma5_gap",
     "ma20_gap",
+    "ma60_gap",
+    "ma120_gap",
     "volatility_20d",
     "volume_change",
     "rsi_14",
@@ -32,7 +36,11 @@ FEATURE_COLUMNS = [
     "turnover_value_ratio",
     "market_return_1d",
     "market_return_5d",
+    "market_return_60d",
+    "market_return_120d",
     "market_ma20_gap",
+    "market_ma60_gap",
+    "market_ma120_gap",
     "market_volatility_20d",
     "excess_return_1d",
     "excess_return_5d",
@@ -52,7 +60,11 @@ FEATURE_COLUMNS = [
 MARKET_FEATURE_DEFAULTS = {
     "market_return_1d": 0.0,
     "market_return_5d": 0.0,
+    "market_return_60d": 0.0,
+    "market_return_120d": 0.0,
     "market_ma20_gap": 0.0,
+    "market_ma60_gap": 0.0,
+    "market_ma120_gap": 0.0,
     "market_volatility_20d": 0.0,
     "market_drop_recent_5d": 0.0,
     "market_drop_recent_20d": 0.0,
@@ -68,16 +80,21 @@ def clean_numeric_features(features: pd.DataFrame) -> pd.DataFrame:
     return clean
 
 
-def read_price_files(price_dir: Path) -> pd.DataFrame:
+def read_price_files(price_dir: Path, tickers: list[str] | None = None) -> pd.DataFrame:
     files = sorted(price_dir.glob("*.parquet")) or sorted(price_dir.glob("*.csv"))
     if not files:
         raise FileNotFoundError(f"no price files found in {price_dir}")
+    wanted = {str(ticker).replace(".KS", "").replace(".KQ", "").zfill(6) for ticker in tickers or []}
     frames = []
     for path in files:
+        if wanted and path.stem.zfill(6) not in wanted:
+            continue
         if path.suffix == ".parquet":
             frames.append(pd.read_parquet(path))
         else:
             frames.append(pd.read_csv(path, parse_dates=["date"], dtype={"ticker": str}))
+    if not frames:
+        raise FileNotFoundError(f"no matching price files found in {price_dir}")
     prices = pd.concat(frames, ignore_index=True)
     required = {"date", "ticker", "open", "high", "low", "close", "adj_close", "volume"}
     missing = required.difference(prices.columns)
@@ -100,8 +117,12 @@ def add_price_features(prices: pd.DataFrame, price_col: str = "adj_close") -> pd
         g["return_1d"] = ret_1d
         g["return_5d"] = px.pct_change(5)
         g["return_20d"] = px.pct_change(20)
+        g["return_60d"] = px.pct_change(60)
+        g["return_120d"] = px.pct_change(120)
         g["ma5_gap"] = px / px.rolling(5).mean() - 1.0
         g["ma20_gap"] = px / px.rolling(20).mean() - 1.0
+        g["ma60_gap"] = px / px.rolling(60).mean() - 1.0
+        g["ma120_gap"] = px / px.rolling(120).mean() - 1.0
         g["volatility_20d"] = ret_1d.rolling(20).std() * np.sqrt(252)
         g["volatility_60d"] = ret_1d.rolling(60).std() * np.sqrt(252)
         g["volume_change"] = volume.pct_change().replace([np.inf, -np.inf], np.nan)
@@ -195,7 +216,11 @@ def add_market_features(features: pd.DataFrame, indices: pd.DataFrame) -> pd.Dat
         ret_1d = close.pct_change()
         group["market_return_1d"] = ret_1d
         group["market_return_5d"] = close.pct_change(5)
+        group["market_return_60d"] = close.pct_change(60)
+        group["market_return_120d"] = close.pct_change(120)
         group["market_ma20_gap"] = close / close.rolling(20).mean() - 1.0
+        group["market_ma60_gap"] = close / close.rolling(60).mean() - 1.0
+        group["market_ma120_gap"] = close / close.rolling(120).mean() - 1.0
         group["market_volatility_20d"] = ret_1d.rolling(20).std() * np.sqrt(252)
         group["market_drawdown_60d"] = close / close.rolling(60).max() - 1.0
         market_drop = (ret_1d <= -0.02).astype(float)
@@ -314,7 +339,7 @@ def build_features(config_path: str | Path) -> dict[str, Path]:
     events_path = project_path(config_path, data_dir, "raw", "events", "events.csv")
     out_dir = project_path(config_path, data_dir, "processed")
 
-    prices = read_price_files(price_dir)
+    prices = read_price_files(price_dir, config["market"].get("tickers"))
     features = add_price_features(prices, config["features"].get("adjusted_price_column", "adj_close"))
     features = add_market_features(features, read_index_files(index_dir))
     features = add_event_features(features, read_events(events_path))

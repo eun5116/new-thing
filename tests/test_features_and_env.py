@@ -7,7 +7,7 @@ from stock_rl.trading_env import MultiTickerTradingEnv, StockTradingEnv, Trading
 
 
 def sample_prices():
-    dates = pd.bdate_range("2024-01-01", periods=90)
+    dates = pd.bdate_range("2024-01-01", periods=180)
     close = [100 + i * 0.5 for i in range(len(dates))]
     return pd.DataFrame(
         {
@@ -46,7 +46,11 @@ def test_add_price_features_uses_next_day_target():
     assert first["target_return_1d"] == expected
     assert {
         "return_1d",
+        "return_60d",
+        "return_120d",
         "ma20_gap",
+        "ma60_gap",
+        "ma120_gap",
         "volatility_20d",
         "turnover_value_ratio",
         "ma20_60_signal",
@@ -71,7 +75,11 @@ def test_add_market_features_joins_index_context():
     merged = add_market_features(features, indices).dropna(subset=["market_return_1d"])
 
     assert "market_return_1d" in merged.columns
+    assert "market_return_60d" in merged.columns
+    assert "market_return_120d" in merged.columns
     assert "market_volatility_20d" in merged.columns
+    assert "market_ma60_gap" in merged.columns
+    assert "market_ma120_gap" in merged.columns
     assert "excess_return_1d" in merged.columns
     assert "drawdown_vs_market_60d" in merged.columns
     assert "market_drop_recent_5d" in merged.columns
