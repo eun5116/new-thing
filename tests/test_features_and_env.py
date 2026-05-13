@@ -159,6 +159,26 @@ def test_trading_env_supports_target_position_actions_and_excess_reward():
     assert "benchmark_return" in info
 
 
+def test_target_position_actions_support_minimum_exposure():
+    features = add_price_features(sample_prices()).dropna().reset_index(drop=True)
+    env = StockTradingEnv(
+        features,
+        ticker="SPY",
+        config=TradingEnvConfig(
+            action_mode="target_position",
+            reward_mode="excess_return",
+            target_position_bins=6,
+            min_target_position_ratio=0.4,
+        ),
+    )
+
+    env.reset()
+    _, _, _, _, info = env.step(0)
+
+    assert env.action_space.n == 6
+    assert info["target_ratio"] == 0.4
+
+
 def test_trading_env_supports_risk_adjusted_reward():
     features = add_price_features(sample_prices()).dropna().reset_index(drop=True)
     env = StockTradingEnv(

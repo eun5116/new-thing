@@ -21,6 +21,7 @@ class TradingEnvConfig:
     transaction_cost_pct: float = 0.001
     volatility_penalty: float = 0.05
     max_position_ratio: float = 1.0
+    min_target_position_ratio: float = 0.0
     action_mode: str = "trade"
     reward_mode: str = "absolute"
     target_position_bins: int = 5
@@ -83,6 +84,8 @@ class StockTradingEnv(gym.Env):
             )
         if self.config.target_position_bins < 2:
             raise ValueError("target_position_bins must be at least 2")
+        if not 0.0 <= self.config.min_target_position_ratio <= self.config.max_position_ratio:
+            raise ValueError("target position ratio must satisfy 0 <= min <= max")
         if not 0.0 <= self.config.drawdown_soft_limit <= self.config.drawdown_hard_limit:
             raise ValueError("drawdown limits must satisfy 0 <= soft_limit <= hard_limit")
 
@@ -181,9 +184,12 @@ class StockTradingEnv(gym.Env):
         current_stock_value = self._shares * price
         current_value = self._cash + current_stock_value
         if self.config.action_mode == "target_position":
-            target_ratio = action / (self.config.target_position_bins - 1)
+            action_ratio = action / (self.config.target_position_bins - 1)
+            min_ratio = self.config.min_target_position_ratio
+            max_ratio = self.config.max_position_ratio
+            target_ratio = min_ratio + (max_ratio - min_ratio) * action_ratio
             self._last_overlay = 0.0
-            target_stock_value = current_value * self.config.max_position_ratio * target_ratio
+            target_stock_value = current_value * target_ratio
         elif self.config.action_mode == "ma20_60_overlay":
             center = (self.config.target_position_bins - 1) / 2.0
             overlay = (action - center) * self.config.overlay_step_size
