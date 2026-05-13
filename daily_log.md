@@ -369,3 +369,14 @@ test 개선은 작고 valid/MDD가 악화돼 기본 후보는 `strong_trend_full
 - 47종목은 2026-05-11 feature 사용, 1종목은 2026-05-08 feature 사용
 - 평균 target ratio: `0.835`
 - 분포: `1.00` 6종목, `0.88` 26종목, `0.70` 16종목
+
+### 운용용 후보표 생성
+
+`current_targets` CSV는 모델 진단 컬럼이 많아서 사람이 바로 보기 어렵다. 종목명, 시장, 현재가, 목표비중, cap 이유, 20/60일 momentum, drawdown만 추린 운용용 후보표를 추가했다.
+
+- 구현: `src/stock_rl/build_trading_sheet.py`
+- CSV: `reports/trading_sheet_20260511_strong_trend_full_else070.csv`
+- Markdown: `reports/trading_sheet_20260511_strong_trend_full_else070.md`
+- 2026-05-11 기준 평균 target ratio: `83.5%`
+- full target: 6종목
+- capped target: 16종목

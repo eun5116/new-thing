@@ -396,3 +396,14 @@
   - raw 가격은 2026-05-11까지 수집됐다.
   - `daily_features`는 추론용 최신 행을 보존하고, train/valid/test만 `target_return_1d`가 있는 행으로 제한한다.
   - 평균 target ratio는 `0.835`이다.
+
+### Trading Sheet
+
+- 추가 파일:
+  - `src/stock_rl/build_trading_sheet.py`
+- 구현 내용:
+  - 최신 `current_targets` 파일에 KRX 종목명, 시장, 현재가, 거래대금, 시총, momentum/drawdown 정보를 붙인다.
+  - 운용자가 보기 쉬운 CSV와 Markdown 요약을 생성한다.
+- 산출물:
+  - `reports/trading_sheet_20260511_strong_trend_full_else070.csv`
+  - `reports/trading_sheet_20260511_strong_trend_full_else070.md`
