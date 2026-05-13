@@ -336,3 +336,63 @@
   - `PYTHONPATH=src .venv/bin/python -m pytest -q`
 - 최종 결과:
   - `14 passed`
+
+## 2026-05-13 Regime Exposure Cap Grid
+
+- 수정 파일:
+  - `src/stock_rl/evaluate_regime_exposure_cap.py`
+- 구현 내용:
+  - E032 replay regime cap 후보에 `strong_trend_full_else080`, `strong_trend_full_else075`, `cap_weak80_drop85`, `cap_weak75_drop85`를 추가했다.
+  - valid/test summary, metrics, trace를 재생성했다.
+- 결과:
+  - valid 최선은 `strong_trend_full_else070`
+  - test `strong_trend_full_else070`: 수익률 `380.0%`, Sharpe `3.39`, MDD `-29.2%`
+  - test `strong_trend_full_else080`: 수익률 `420.6%`, Sharpe `3.56`, MDD `-30.9%`
+- 결론:
+  - 기본 후보는 `strong_trend_full_else070`
+  - 공격 후보는 `strong_trend_full_else080`
+
+### Regime Cap Breakdown And Stock Exception
+
+- 추가 파일:
+  - `src/stock_rl/analyze_regime_exposure_cap.py`
+- 수정 파일:
+  - `src/stock_rl/evaluate_regime_exposure_cap.py`
+- 구현 내용:
+  - regime cap trace/metrics에서 월별 summary, 후보-vs-baseline 월별 비교, 종목별 비교 CSV를 생성하는 분석기를 추가했다.
+  - 강한 종목 예외 rule인 `strong_trend_or_stock_full_else070/080`, `strong_trend_or_very_strong_stock_full_else070/080`을 추가했다.
+- 결과:
+  - `strong_trend_full_else070`은 test에서 47/48 종목의 MDD를 개선하지만 수익률은 uncapped보다 낮다.
+  - `strong_trend_or_very_strong_stock_full_else070`은 test 수익률을 `380.0%`에서 `383.4%`로 소폭 올렸지만 MDD가 `-29.2%`에서 `-29.4%`로 악화됐다.
+- 결론:
+  - 기본 후보는 계속 `strong_trend_full_else070`
+  - stock-level 예외는 개선 폭 대비 복잡도가 높아 채택 보류
+
+### Candidate Scorecard
+
+- 추가 파일:
+  - `src/stock_rl/build_candidate_scorecard.py`
+- 구현 내용:
+  - 기존 PPO 후보 CSV와 regime exposure cap summary를 합쳐 valid/test scorecard를 생성한다.
+  - Buy & Hold, MA20/60, E028/E030/E032/E034 PPO, E032 replay cap 후보를 한 표에서 비교한다.
+- 산출물:
+  - `reports/candidate_scorecard_valid.csv`
+  - `reports/candidate_scorecard_test.csv`
+  - `reports/candidate_scorecard_valid_test.csv`
+- 결론:
+  - valid 1위는 `E032_replay_strong_trend_full_else070`
+  - 기본 후보를 `strong_trend_full_else070`으로 유지한다.
+
+### Current Target Generator
+
+- 추가 파일:
+  - `src/stock_rl/generate_current_targets.py`
+- 구현 내용:
+  - 저장된 E032 PPO 모델과 선택된 regime cap rule로 최신 feature 행의 종목별 target ratio를 산출한다.
+  - optional positions CSV가 있으면 현재 position ratio를 observation에 반영할 수 있다.
+- 산출물:
+  - `reports/current_targets_20260511_strong_trend_full_else070.csv`
+- 결과:
+  - raw 가격은 2026-05-11까지 수집됐다.
+  - `daily_features`는 추론용 최신 행을 보존하고, train/valid/test만 `target_return_1d`가 있는 행으로 제한한다.
+  - 평균 target ratio는 `0.835`이다.

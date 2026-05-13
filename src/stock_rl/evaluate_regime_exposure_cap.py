@@ -22,6 +22,8 @@ class CapRule:
     recent_drop_cap: float | None = None
     drawdown_cap: float | None = None
     full_only_in_strong_trend: bool = False
+    full_in_strong_stock: bool = False
+    full_in_very_strong_stock: bool = False
 
 
 RULES = [
@@ -31,7 +33,35 @@ RULES = [
     CapRule("cap_weak_or_drop_085", weak_market_cap=0.85, recent_drop_cap=0.85),
     CapRule("cap_weak70_drop85", weak_market_cap=0.70, recent_drop_cap=0.85),
     CapRule("strong_trend_full_else085", default_cap=0.85, full_only_in_strong_trend=True),
+    CapRule("strong_trend_full_else080", default_cap=0.80, full_only_in_strong_trend=True),
+    CapRule("strong_trend_full_else075", default_cap=0.75, full_only_in_strong_trend=True),
     CapRule("strong_trend_full_else070", default_cap=0.70, full_only_in_strong_trend=True),
+    CapRule(
+        "strong_trend_or_stock_full_else080",
+        default_cap=0.80,
+        full_only_in_strong_trend=True,
+        full_in_strong_stock=True,
+    ),
+    CapRule(
+        "strong_trend_or_stock_full_else070",
+        default_cap=0.70,
+        full_only_in_strong_trend=True,
+        full_in_strong_stock=True,
+    ),
+    CapRule(
+        "strong_trend_or_very_strong_stock_full_else080",
+        default_cap=0.80,
+        full_only_in_strong_trend=True,
+        full_in_very_strong_stock=True,
+    ),
+    CapRule(
+        "strong_trend_or_very_strong_stock_full_else070",
+        default_cap=0.70,
+        full_only_in_strong_trend=True,
+        full_in_very_strong_stock=True,
+    ),
+    CapRule("cap_weak80_drop85", weak_market_cap=0.80, recent_drop_cap=0.85),
+    CapRule("cap_weak75_drop85", weak_market_cap=0.75, recent_drop_cap=0.85),
 ]
 
 
@@ -86,12 +116,39 @@ def _is_strong_trend(row: pd.Series) -> bool:
     )
 
 
+def _is_strong_stock(row: pd.Series) -> bool:
+    return bool(
+        row.get("ma20_60_position", 0.0) > 0
+        and row.get("ma60_gap", 0.0) > 0
+        and row.get("relative_strength_20d", 0.0) >= 0.10
+        and row.get("return_20d", 0.0) >= 0.10
+        and row.get("return_60d", 0.0) >= 0.15
+    )
+
+
+def _is_very_strong_stock(row: pd.Series) -> bool:
+    return bool(
+        row.get("ma20_60_position", 0.0) > 0
+        and row.get("ma60_gap", 0.0) >= 0.15
+        and row.get("relative_strength_20d", 0.0) >= 0.15
+        and row.get("return_20d", 0.0) >= 0.15
+        and row.get("return_60d", 0.0) >= 0.30
+        and row.get("drawdown_60d", 0.0) > -0.10
+    )
+
+
 def _cap_for_row(row: pd.Series, rule: CapRule) -> tuple[float, str]:
     cap = rule.default_cap
     reasons = []
     if rule.full_only_in_strong_trend and _is_strong_trend(row):
         cap = 1.0
         reasons.append("strong_trend")
+    if rule.full_in_strong_stock and _is_strong_stock(row):
+        cap = 1.0
+        reasons.append("strong_stock")
+    if rule.full_in_very_strong_stock and _is_very_strong_stock(row):
+        cap = 1.0
+        reasons.append("very_strong_stock")
     if rule.weak_market_cap is not None and _is_weak_market(row):
         cap = min(cap, rule.weak_market_cap)
         reasons.append("weak_market")

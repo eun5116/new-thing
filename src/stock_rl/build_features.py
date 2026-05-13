@@ -316,12 +316,13 @@ def split_and_write(features: pd.DataFrame, config: dict, out_dir: Path) -> dict
     clean = clean_numeric_features(features)
     event_columns = sorted(column for column in clean.columns if column.startswith("event_"))
     model_columns = FEATURE_COLUMNS + event_columns
-    clean = clean.dropna(subset=model_columns + ["target_return_1d"]).reset_index(drop=True)
+    inference_clean = clean.dropna(subset=model_columns).reset_index(drop=True)
+    trainable_clean = inference_clean.dropna(subset=["target_return_1d"]).reset_index(drop=True)
     splits = {
-        "daily_features": clean,
-        "train": clean[clean["date"] <= train_end],
-        "valid": clean[(clean["date"] > train_end) & (clean["date"] <= valid_end)],
-        "test": clean[clean["date"] > valid_end],
+        "daily_features": inference_clean,
+        "train": trainable_clean[trainable_clean["date"] <= train_end],
+        "valid": trainable_clean[(trainable_clean["date"] > train_end) & (trainable_clean["date"] <= valid_end)],
+        "test": trainable_clean[trainable_clean["date"] > valid_end],
     }
     written = {}
     for name, frame in splits.items():

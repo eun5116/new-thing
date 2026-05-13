@@ -319,3 +319,53 @@ E030이 너무 방어적이었기 때문에 같은 feature set에서 reward를 �
 - `reports/krx_stop_reentry_strategy_result_2026-05-13.md`
 - `reports/krx_e030_long_trend_feature_result_2026-05-13.md`
 - `reports/krx_e031_long_trend_more_aggressive_result_2026-05-13.md`
+
+### Regime cap grid 추가 결과
+
+E032 replay + regime exposure cap 후보를 `0.70/0.75/0.80/0.85`로 촘촘히 비교했다.
+
+- valid 기준 최선: `strong_trend_full_else070`
+- test `strong_trend_full_else070`: 수익률 `380.0%`, Sharpe `3.39`, MDD `-29.2%`
+- test `strong_trend_full_else080`: 수익률 `420.6%`, Sharpe `3.56`, MDD `-30.9%`
+
+현재 기본 후보는 E028보다 수익률이 높고 MDD가 거의 같은 `strong_trend_full_else070`이다. MDD `~31%`를 허용하는 공격 후보는 `strong_trend_full_else080`이다.
+
+관련 보고서:
+
+- `reports/krx_regime_exposure_cap_grid_result_2026-05-13.md`
+- `reports/krx_regime_exposure_cap_breakdown_2026-05-13.md`
+
+### Stock-level cap 예외 평가
+
+강한 종목은 market strong trend가 아니어도 full exposure를 허용하는 조건을 추가했다.
+
+- `strong_trend_or_very_strong_stock_full_else070` test: 수익률 `383.4%`, Sharpe `3.40`, MDD `-29.4%`
+- 기존 `strong_trend_full_else070` test: 수익률 `380.0%`, Sharpe `3.39`, MDD `-29.2%`
+
+test 개선은 작고 valid/MDD가 악화돼 기본 후보는 `strong_trend_full_else070`으로 유지한다.
+
+### Candidate scorecard 정리
+
+기존 PPO 후보, Buy & Hold, MA20/60, E032 replay cap 후보를 같은 표로 비교했다.
+
+- valid 1위: `E032_replay_strong_trend_full_else070`
+- test `strong_trend_full_else070`: 수익률 `380.0%`, Sharpe `3.39`, MDD `-29.2%`
+- test E028 PPO: 수익률 `326.6%`, Sharpe `3.25`, MDD `-28.9%`
+
+기본 후보는 `strong_trend_full_else070`으로 유지한다. 다음 단계는 이 rule을 최종 overlay target ratio 산출기로 고정하는 것이다.
+
+관련 보고서:
+
+- `reports/krx_candidate_scorecard_2026-05-13.md`
+
+### Current target ratio 산출
+
+`src/stock_rl/generate_current_targets.py`를 추가해 최신 feature 행 기준 종목별 목표비중을 생성했다.
+
+- 산출물: `reports/current_targets_20260511_strong_trend_full_else070.csv`
+- raw 가격 최신일: `2026-05-11`
+- daily feature 최신일: `2026-05-11`
+- 48종목 전체 산출
+- 47종목은 2026-05-11 feature 사용, 1종목은 2026-05-08 feature 사용
+- 평균 target ratio: `0.835`
+- 분포: `1.00` 6종목, `0.88` 26종목, `0.70` 16종목

@@ -106,6 +106,24 @@ def test_split_and_write_removes_infinite_volume_change(tmp_path):
     assert train["volume_change"].map(lambda value: value != float("inf")).all()
 
 
+def test_split_and_write_keeps_latest_daily_feature_for_inference(tmp_path):
+    features = add_price_features(sample_prices())
+    config = {
+        "features": {
+            "train_end": "2024-02-29",
+            "valid_end": "2024-03-29",
+        }
+    }
+
+    written = split_and_write(features, config, tmp_path)
+    daily = pd.read_parquet(written["daily_features"])
+    train = pd.read_parquet(written["train"])
+
+    assert daily["date"].max() == features["date"].max()
+    assert daily.loc[daily["date"] == daily["date"].max(), "target_return_1d"].isna().all()
+    assert train["target_return_1d"].notna().all()
+
+
 def test_add_event_features_supports_all_market_events():
     features = add_price_features(sample_prices()).dropna().reset_index(drop=True)
     event_date = features.iloc[0]["date"]
