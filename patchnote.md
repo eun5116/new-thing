@@ -407,3 +407,51 @@
 - 산출물:
   - `reports/trading_sheet_20260511_strong_trend_full_else070.csv`
   - `reports/trading_sheet_20260511_strong_trend_full_else070.md`
+
+## 2026-05-14 Incremental Price Collection
+
+- 수정 파일:
+  - `src/stock_rl/collect_prices.py`
+  - `daily_log.md`
+- 구현 내용:
+  - `collect_prices(config_path, start=None, end=None)` 형태로 수집 기간 override를 지원한다.
+  - CLI에 `--start`, `--end` 옵션을 추가했다.
+  - 부분 기간 수집 결과를 기존 ticker별 parquet/CSV와 병합하고, `ticker/date` 기준 중복은 최신 행으로 정리한다.
+  - KRX 증분 기간에 신규 행이 없으면 기존 가격 파일이 모두 있을 때 정상 종료한다.
+- 이유:
+  - 운용표 갱신은 최신 며칠만 확인하면 되는데 기존 수집기는 config `market.start`부터 전체 기간을 다시 순회했다.
+  - 매일 target ratio를 갱신할 때 전체 수집 비용을 줄이고, 아직 KRX가 최신 일자를 반환하지 않는 경우도 실패로 보지 않게 했다.
+- 확인:
+  - 2026-05-12~2026-05-14 증분 수집에서는 KRX 신규 행이 없었다.
+  - `daily_features.parquet` 최신 유효 거래일은 `2026-05-11`로 유지됐다.
+  - `reports/current_targets_20260511_strong_trend_full_else070.csv`와 `reports/trading_sheet_20260511_strong_trend_full_else070.md`를 재생성했다.
+- 검증:
+  - `PYTHONPATH=src .venv/bin/python -m pytest -q`
+  - 결과: `16 passed`
+
+### Daily Target Update Entrypoint
+
+- 추가 파일:
+  - `src/stock_rl/update_daily_targets.py`
+- 수정 파일:
+  - `src/stock_rl/collect_krx_reference.py`
+  - `src/stock_rl/generate_current_targets.py`
+  - `tests/test_features_and_env.py`
+  - `README.md`
+  - `daily_log.md`
+- 구현 내용:
+  - `update_daily_targets` entrypoint를 추가해 증분 가격 수집, feature build, current target 생성, trading sheet 생성을 한 번에 실행하게 했다.
+  - 기존 `daily_features.parquet` 최신일 다음 날을 증분 수집 시작일로 자동 추정한다.
+  - KOSPI/KOSDAQ 지수 증분 수집도 daily update에 포함했다.
+  - 지수 부분 수집 결과는 기존 parquet와 병합하고, 신규 행이 없으면 기존 파일을 유지한다.
+  - `--start`, `--end`, `--skip-collect`, `--skip-indices`, `--skip-features` 옵션을 지원한다.
+  - 실행 요약에 `stale_count`, `max_feature_lag_days`를 포함해 최신 feature가 없는 종목을 바로 확인할 수 있게 했다.
+  - 실행 요약에 `index_latest`를 포함해 지수 최신일도 확인할 수 있게 했다.
+  - `generate_current_targets` 실행 전 `MPLCONFIGDIR` 기본값을 `/tmp/stock_rl_matplotlib`로 설정해 matplotlib cache 경고를 제거했다.
+- 사용 예:
+  - `PYTHONPATH=src .venv/bin/python -m stock_rl.update_daily_targets --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml --rule strong_trend_full_else070`
+- 검증:
+  - `PYTHONPATH=src .venv/bin/python -m pytest -q`
+  - 결과: `18 passed`
+  - `PYTHONPATH=src .venv/bin/python -m stock_rl.update_daily_targets --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml --rule strong_trend_full_else070 --skip-collect --skip-features`
+  - 추가 테스트 후 결과: `19 passed`

@@ -58,6 +58,18 @@ pip install -r requirements-rl-cpu.txt
 python -m stock_rl.train_rl --config configs/config.yaml
 ```
 
+## 운용표 갱신
+
+현재 기본 운용 후보는 E032 PPO와 `strong_trend_full_else070` cap rule입니다. 최신 KRX 가격과 지수를 증분 확인하고, feature/target/trading sheet를 한 번에 갱신하려면 아래 명령을 사용합니다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.update_daily_targets \
+  --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml \
+  --rule strong_trend_full_else070
+```
+
+수집 시작일은 기존 `daily_features.parquet`의 최신일 다음 날로 자동 추정합니다. 필요하면 `--start YYYY-MM-DD`로 직접 지정할 수 있습니다. 출력의 `index_latest`, `stale`, `max_lag`를 보면 지수/종목 최신일이 어긋났는지 바로 확인할 수 있습니다.
+
 ## 이벤트 CSV 스키마
 
 `data/raw/events/events.csv`는 아래 컬럼을 사용합니다.

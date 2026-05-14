@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import numpy as np
@@ -44,6 +45,9 @@ def generate_targets(
     positions_path: str | None = None,
     out_path: str | None = None,
 ) -> Path:
+    matplotlib_cache_dir = Path("/tmp/stock_rl_matplotlib")
+    matplotlib_cache_dir.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("MPLCONFIGDIR", str(matplotlib_cache_dir))
     try:
         from stable_baselines3 import PPO
     except ImportError as exc:

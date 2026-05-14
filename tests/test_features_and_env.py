@@ -4,6 +4,7 @@ from stock_rl.build_features import add_event_features, add_market_features, add
 from stock_rl.krx_openapi import normalize_stock_daily
 from stock_rl.smoke_env import run_smoke
 from stock_rl.trading_env import MultiTickerTradingEnv, StockTradingEnv, TradingEnvConfig
+from stock_rl.update_daily_targets import _index_summary, infer_incremental_start
 
 
 def sample_prices():
@@ -122,6 +123,58 @@ def test_split_and_write_keeps_latest_daily_feature_for_inference(tmp_path):
     assert daily["date"].max() == features["date"].max()
     assert daily.loc[daily["date"] == daily["date"].max(), "target_return_1d"].isna().all()
     assert train["target_return_1d"].notna().all()
+
+
+def test_infer_incremental_start_from_latest_features(tmp_path):
+    project = tmp_path / "project"
+    config_dir = project / "configs"
+    processed_dir = project / "data_krx" / "processed"
+    config_dir.mkdir(parents=True)
+    processed_dir.mkdir(parents=True)
+    config_path = config_dir / "test.yaml"
+    config_path.write_text(
+        "project:\n"
+        "  data_dir: data_krx\n"
+        "market:\n"
+        "  start: '2020-01-01'\n",
+        encoding="utf-8",
+    )
+    pd.DataFrame({"date": pd.to_datetime(["2026-05-10", "2026-05-11"])}).to_parquet(
+        processed_dir / "daily_features.parquet",
+        index=False,
+    )
+
+    assert infer_incremental_start(config_path) == "2026-05-12"
+
+
+def test_infer_incremental_start_falls_back_to_config_start(tmp_path):
+    project = tmp_path / "project"
+    config_dir = project / "configs"
+    config_dir.mkdir(parents=True)
+    config_path = config_dir / "test.yaml"
+    config_path.write_text(
+        "project:\n"
+        "  data_dir: data_krx\n"
+        "market:\n"
+        "  start: '2020-01-01'\n",
+        encoding="utf-8",
+    )
+
+    assert infer_incremental_start(config_path) == "2020-01-01"
+
+
+def test_index_summary_reports_latest_date(tmp_path):
+    path = tmp_path / "kospi_indices.parquet"
+    pd.DataFrame(
+        {
+            "date": pd.to_datetime(["2026-05-11", "2026-05-13"]),
+            "market": ["KOSPI", "KOSPI"],
+            "index_name": ["코스피", "코스피"],
+            "close": [3000.0, 3010.0],
+        }
+    ).to_parquet(path, index=False)
+
+    assert _index_summary([path]) == {"KOSPI": "2026-05-13"}
 
 
 def test_add_event_features_supports_all_market_events():

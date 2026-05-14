@@ -48,22 +48,40 @@ def collect_index_series(
     market: str,
     start: str,
     end: str | None = None,
+    allow_empty: bool = False,
 ) -> Path:
     cache_dir = project_path("configs/krx_kospi.yaml", data_dir, "raw", "krx_daily_cache")
-    frame = fetch_index_history(
-        client,
-        market,
-        start,
-        end,
-        index_names=DEFAULT_INDEX_NAMES[market],
-        cache_dir=cache_dir,
-    )
     out_dir = project_path("configs/krx_kospi.yaml", data_dir, "raw", "indices")
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{market.lower()}_indices.parquet"
-    frame.to_parquet(path, index=False)
+    try:
+        frame = fetch_index_history(
+            client,
+            market,
+            start,
+            end,
+            index_names=DEFAULT_INDEX_NAMES[market],
+            cache_dir=cache_dir,
+        )
+    except ValueError as exc:
+        if allow_empty and "No KRX index data returned" in str(exc) and path.exists():
+            print(f"{market} indices {start}..{end or 'today'}: no new rows, keeping {path}")
+            return path
+        raise
+    frame = _merge_index_history(path, frame)
     print(f"{market} indices {start}..{end or 'today'}: {path} rows={len(frame)}")
     return path
+
+
+def _merge_index_history(path: Path, frame: pd.DataFrame) -> pd.DataFrame:
+    if path.exists():
+        existing = pd.read_parquet(path)
+        frame = pd.concat([existing, frame], ignore_index=True)
+    frame["date"] = pd.to_datetime(frame["date"], errors="coerce").dt.date
+    frame = frame.drop_duplicates(["market", "index_name", "date"], keep="last")
+    frame = frame.sort_values(["market", "index_name", "date"]).reset_index(drop=True)
+    frame.to_parquet(path, index=False)
+    return frame
 
 
 def main() -> None:

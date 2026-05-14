@@ -380,3 +380,51 @@ test 개선은 작고 valid/MDD가 악화돼 기본 후보는 `strong_trend_full
 - 2026-05-11 기준 평균 target ratio: `83.5%`
 - full target: 6종목
 - capped target: 16종목
+
+## 2026-05-14
+
+### 최신 KRX 데이터 확인
+
+2026-05-14 오전에 KRX 가격 수집과 feature build를 다시 실행했다.
+
+확인 결과:
+
+- KRX API는 2026-05-12~2026-05-14 구간에서 현재 universe 신규 가격 행을 반환하지 않았다.
+- `daily_features.parquet` 최신 유효 거래일은 계속 `2026-05-11`이다.
+- 48종목 중 47종목은 `2026-05-11`, 1종목은 `2026-05-08` feature가 최신이다.
+
+따라서 `strong_trend_full_else070` 기준 current target과 trading sheet는 `2026-05-11` 기준으로 재생성했다.
+
+### 증분 수집 옵션 추가
+
+실사용에서는 매번 2020년부터 전체 영업일을 훑을 필요가 없어서 `collect_prices`에 증분 수집 옵션을 추가했다.
+
+추가된 흐름:
+
+- `--start`로 수집 시작일을 override할 수 있다.
+- `--end`로 종료일도 override할 수 있다.
+- 부분 기간만 수집해도 기존 ticker별 parquet/CSV와 병합한다.
+- 증분 기간에 신규 KRX 행이 없으면 기존 가격 파일을 유지하고 정상 종료한다.
+
+검증:
+
+- `PYTHONPATH=src .venv/bin/python -m pytest -q`: `16 passed`
+- `PYTHONPATH=src .venv/bin/python -m stock_rl.collect_prices --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml --start 2026-05-12`
+
+운용 갱신용 명령은 앞으로 전체 재수집 대신 위 증분 수집을 먼저 쓰는 것이 좋다.
+
+### Daily update command 추가
+
+증분 수집, feature build, current target 생성, trading sheet 생성을 한 번에 묶는 entrypoint를 추가했다.
+
+명령:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.update_daily_targets \
+  --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml \
+  --rule strong_trend_full_else070
+```
+
+현재 `daily_features` 최신일이 `2026-05-11`이므로, 별도 `--start`가 없으면 수집 시작일을 `2026-05-12`로 자동 추정한다. `stable_baselines3` import 중 발생하던 matplotlib cache 경고도 `/tmp/stock_rl_matplotlib`를 기본 cache 경로로 잡아 없앴다.
+
+추가로 daily update에 KOSPI/KOSDAQ 지수 증분 수집도 포함했다. 종목 가격은 아직 `2026-05-11`이 최신이지만, KOSPI 지수는 `2026-05-13`까지 들어왔다. 출력에 `index_latest`, `stale`, `max_lag`를 표시해 종목 가격과 지수 최신일 불일치를 바로 볼 수 있게 했다.

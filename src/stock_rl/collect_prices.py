@@ -34,9 +34,11 @@ def fetch_yfinance(ticker: str, start: str, end: str | None) -> pd.DataFrame:
     return frame[keep].sort_values(["ticker", "date"])
 
 
-def collect_prices(config_path: str | Path) -> list[Path]:
+def collect_prices(config_path: str | Path, start: str | None = None, end: str | None = None) -> list[Path]:
     config = load_config(config_path)
     market = config["market"]
+    start_date = start or market["start"]
+    end_date = end if end is not None else market.get("end")
     out_dir = project_path(config_path, config["project"]["data_dir"], "raw", "prices")
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -56,29 +58,39 @@ def collect_prices(config_path: str | Path) -> list[Path]:
         cache_dir = project_path(config_path, config["project"]["data_dir"], "raw", "krx_daily_cache")
         price_frames = []
         for market_name, tickers in grouped_tickers.items():
-            price_frames.append(
-                fetch_stock_prices(
-                    client,
-                    market_name,
-                    tickers,
-                    market["start"],
-                    market.get("end"),
-                    cache_dir=cache_dir,
+            try:
+                price_frames.append(
+                    fetch_stock_prices(
+                        client,
+                        market_name,
+                        tickers,
+                        start_date,
+                        end_date,
+                        cache_dir=cache_dir,
+                    )
                 )
-            )
+            except ValueError as exc:
+                if start is None or "No KRX price data returned" not in str(exc):
+                    raise
+                print(f"KRX {market_name}: no new rows for {start_date}..{end_date or 'today'}", flush=True)
+        if not price_frames:
+            existing_paths = [out_dir / f"{_normalize_krx_ticker(ticker)}.parquet" for ticker in market["tickers"]]
+            if all(path.exists() for path in existing_paths):
+                return existing_paths
+            raise ValueError(f"No KRX price data returned for {start_date}..{end_date or 'today'}.")
         prices = pd.concat(price_frames, ignore_index=True)
         written = []
         for ticker, group in prices.groupby("ticker"):
             out_path = out_dir / f"{ticker}.parquet"
-            group.to_parquet(out_path, index=False)
+            _write_prices(group, out_path)
             written.append(out_path)
         return written
 
     written: list[Path] = []
     for ticker in market["tickers"]:
-        prices = fetch_yfinance(ticker, market["start"], market.get("end"))
+        prices = fetch_yfinance(ticker, start_date, end_date)
         out_path = out_dir / f"{ticker}.csv"
-        prices.to_csv(out_path, index=False)
+        _write_prices(prices, out_path)
         written.append(out_path)
     return written
 
@@ -87,11 +99,36 @@ def _normalize_krx_ticker(ticker: str) -> str:
     return str(ticker).replace(".KS", "").replace(".KQ", "").zfill(6)
 
 
+def _read_existing_prices(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame()
+    if path.suffix == ".parquet":
+        return pd.read_parquet(path)
+    return pd.read_csv(path)
+
+
+def _write_prices(prices: pd.DataFrame, out_path: Path) -> None:
+    existing = _read_existing_prices(out_path)
+    if existing.empty:
+        merged = prices.copy()
+    else:
+        merged = pd.concat([existing, prices], ignore_index=True)
+    merged["date"] = pd.to_datetime(merged["date"]).dt.date
+    merged["ticker"] = merged["ticker"].astype(str).str.zfill(6)
+    merged = merged.drop_duplicates(["ticker", "date"], keep="last").sort_values(["ticker", "date"])
+    if out_path.suffix == ".parquet":
+        merged.to_parquet(out_path, index=False)
+    else:
+        merged.to_csv(out_path, index=False)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/config.yaml")
+    parser.add_argument("--start", default=None, help="Override config market.start for incremental collection")
+    parser.add_argument("--end", default=None, help="Override config market.end")
     args = parser.parse_args()
-    for path in collect_prices(args.config):
+    for path in collect_prices(args.config, start=args.start, end=args.end):
         print(path)
 
 
