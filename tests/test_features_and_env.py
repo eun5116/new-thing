@@ -1,10 +1,18 @@
 import pandas as pd
 
 from stock_rl.build_features import add_event_features, add_market_features, add_price_features, split_and_write
+from stock_rl.build_target_change_report import build_target_change_report
+from stock_rl.backtest_portfolio_allocator import simulate_portfolio
+from stock_rl.collection_state import load_collection_state, mark_empty_response, recently_checked_empty, save_collection_state
 from stock_rl.krx_openapi import normalize_stock_daily
 from stock_rl.smoke_env import run_smoke
 from stock_rl.trading_env import MultiTickerTradingEnv, StockTradingEnv, TradingEnvConfig
-from stock_rl.update_daily_targets import _index_summary, infer_incremental_start
+from stock_rl.update_daily_targets import (
+    _index_summary,
+    infer_incremental_start,
+    infer_index_collection_starts,
+    infer_market_collection_starts,
+)
 
 
 def sample_prices():
@@ -175,6 +183,152 @@ def test_index_summary_reports_latest_date(tmp_path):
     ).to_parquet(path, index=False)
 
     assert _index_summary([path]) == {"KOSPI": "2026-05-13"}
+
+
+def test_infer_market_collection_starts_from_raw_prices(tmp_path):
+    project = tmp_path / "project"
+    config_dir = project / "configs"
+    price_dir = project / "data_krx" / "raw" / "prices"
+    config_dir.mkdir(parents=True)
+    price_dir.mkdir(parents=True)
+    config_path = config_dir / "test.yaml"
+    config_path.write_text(
+        "project:\n"
+        "  data_dir: data_krx\n"
+        "market:\n"
+        "  start: '2020-01-01'\n"
+        "  price_source: krx_openapi\n"
+        "  tickers: ['000001', '000002']\n"
+        "  ticker_markets:\n"
+        "    '000001': KOSPI\n"
+        "    '000002': KOSPI\n",
+        encoding="utf-8",
+    )
+    pd.DataFrame({"date": pd.to_datetime(["2026-05-11", "2026-05-13"]), "ticker": ["000001", "000001"]}).to_parquet(
+        price_dir / "000001.parquet",
+        index=False,
+    )
+    pd.DataFrame({"date": pd.to_datetime(["2026-05-11"]), "ticker": ["000002"]}).to_parquet(
+        price_dir / "000002.parquet",
+        index=False,
+    )
+
+    assert infer_market_collection_starts(config_path) == {"KOSPI": "2026-05-12"}
+
+
+def test_infer_index_collection_starts_from_raw_indices(tmp_path):
+    project = tmp_path / "project"
+    config_dir = project / "configs"
+    index_dir = project / "data_krx" / "raw" / "indices"
+    config_dir.mkdir(parents=True)
+    index_dir.mkdir(parents=True)
+    config_path = config_dir / "test.yaml"
+    config_path.write_text(
+        "project:\n"
+        "  data_dir: data_krx\n"
+        "market:\n"
+        "  start: '2020-01-01'\n"
+        "  tickers: ['000001']\n"
+        "  ticker_markets:\n"
+        "    '000001': KOSPI\n",
+        encoding="utf-8",
+    )
+    pd.DataFrame({"date": pd.to_datetime(["2026-05-13"]), "market": ["KOSPI"]}).to_parquet(
+        index_dir / "kospi_indices.parquet",
+        index=False,
+    )
+
+    assert infer_index_collection_starts(config_path) == {"KOSPI": "2026-05-14"}
+
+
+def test_build_target_change_report_compares_previous_target(tmp_path):
+    project = tmp_path / "project"
+    config_dir = project / "configs"
+    reports_dir = project / "reports"
+    config_dir.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+    config_path = config_dir / "test.yaml"
+    config_path.write_text(
+        "project:\n"
+        "  data_dir: data_krx\n",
+        encoding="utf-8",
+    )
+    base_columns = {
+        "feature_date": ["2026-05-11", "2026-05-11"],
+        "rule": ["strong_trend_full_else070", "strong_trend_full_else070"],
+        "model_name": ["model", "model"],
+        "assumed_position_ratio": [0.0, 0.0],
+        "action": [5, 5],
+        "raw_target_ratio": [1.0, 1.0],
+        "cap": [1.0, 0.7],
+        "cap_reason": ["strong_trend", "none"],
+        "market_return_60d": [0.1, 0.1],
+        "market_return_120d": [0.1, 0.1],
+        "market_ma60_gap": [0.1, 0.1],
+        "market_ma120_gap": [0.1, 0.1],
+        "relative_strength_20d": [0.1, -0.1],
+        "return_20d": [0.2, -0.1],
+        "return_60d": [0.3, 0.0],
+        "drawdown_60d": [0.0, -0.2],
+    }
+    previous = pd.DataFrame(
+        {
+            "as_of_date": ["2026-05-11", "2026-05-11"],
+            "ticker": ["000001", "000002"],
+            "target_ratio": [0.88, 1.0],
+            **base_columns,
+        }
+    )
+    current = pd.DataFrame(
+        {
+            "as_of_date": ["2026-05-13", "2026-05-13"],
+            "ticker": ["000001", "000002"],
+            "target_ratio": [1.0, 0.7],
+            **base_columns,
+        }
+    )
+    previous.to_csv(reports_dir / "current_targets_20260511_strong_trend_full_else070.csv", index=False)
+    current_path = reports_dir / "current_targets_20260513_strong_trend_full_else070.csv"
+    current.to_csv(current_path, index=False)
+
+    result = build_target_change_report(str(config_path), current_target_path=str(current_path))
+    assert result is not None
+    changes = pd.read_csv(result["csv"], dtype={"ticker": str})
+
+    assert set(changes["rebalance_action"]) == {"increase", "reduce"}
+    assert changes.loc[changes["ticker"] == "000001", "target_delta_pct"].iloc[0] == 12.0
+    assert changes.loc[changes["ticker"] == "000002", "target_delta_pct"].iloc[0] == -30.0
+
+
+def test_collection_state_tracks_recent_empty_response(tmp_path):
+    state_path = tmp_path / "collection_state.json"
+    state = {}
+    mark_empty_response(state, "stock", "KOSPI", "20260514")
+    save_collection_state(state_path, state)
+    loaded = load_collection_state(state_path)
+
+    assert recently_checked_empty(loaded, "stock", "KOSPI", "20260514", ttl_minutes=60)
+    assert not recently_checked_empty(loaded, "stock", "KOSPI", "20260514", ttl_minutes=0)
+
+
+def test_simulate_portfolio_respects_gross_cap_and_costs():
+    features = add_price_features(sample_multi_ticker_prices()).dropna().reset_index(drop=True)
+    features["e032_target_ratio"] = 1.0
+
+    returns, trace, allocations = simulate_portfolio(
+        features,
+        "e032_target_basket",
+        top_n=2,
+        gross_cap=0.9,
+        max_weight=0.6,
+        transaction_cost_pct=0.0015,
+        rebalance_frequency="weekly",
+    )
+
+    assert len(returns) == trace.shape[0]
+    assert trace["gross_exposure"].max() <= 0.91
+    assert trace["cost"].sum() > 0
+    assert allocations["target_weight"].max() <= 0.6
 
 
 def test_add_event_features_supports_all_market_events():

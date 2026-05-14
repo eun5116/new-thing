@@ -428,3 +428,105 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.update_daily_targets \
 현재 `daily_features` 최신일이 `2026-05-11`이므로, 별도 `--start`가 없으면 수집 시작일을 `2026-05-12`로 자동 추정한다. `stable_baselines3` import 중 발생하던 matplotlib cache 경고도 `/tmp/stock_rl_matplotlib`를 기본 cache 경로로 잡아 없앴다.
 
 추가로 daily update에 KOSPI/KOSDAQ 지수 증분 수집도 포함했다. 종목 가격은 아직 `2026-05-11`이 최신이지만, KOSPI 지수는 `2026-05-13`까지 들어왔다. 출력에 `index_latest`, `stale`, `max_lag`를 표시해 종목 가격과 지수 최신일 불일치를 바로 볼 수 있게 했다.
+
+### 장마감 후 2026-05-13 운용표 갱신
+
+장마감 후 daily update를 다시 실행했다. 낮에 KRX가 빈 응답을 반환했던 `2026-05-12`~`2026-05-14` cache를 그대로 믿는 문제가 있어, 최근 7일 안의 빈 cache는 재조회하도록 수정했다.
+
+재실행 결과:
+
+- 종목 가격 최신일: `2026-05-13`
+- KOSPI/KOSDAQ 지수 최신일: `2026-05-13`
+- feature 최신일: `2026-05-13`
+- stale feature row: `0`
+- 산출물:
+  - `reports/current_targets_20260513_strong_trend_full_else070.csv`
+  - `reports/trading_sheet_20260513_strong_trend_full_else070.csv`
+  - `reports/trading_sheet_20260513_strong_trend_full_else070.md`
+
+요약:
+
+- 평균 target ratio: `83.8%`
+- full target: 13종목
+- capped target: 20종목
+
+### Target change report 추가
+
+최신 target과 직전 target을 비교하는 리밸런싱 변화표를 추가했다.
+
+산출물:
+
+- `reports/target_changes_20260513_strong_trend_full_else070.csv`
+- `reports/target_changes_20260513_strong_trend_full_else070.md`
+
+2026-05-11 대비 2026-05-13 변화:
+
+- increase: 11종목
+- reduce: 7종목
+- hold: 30종목
+
+증가 후보는 주로 KOSPI 강한 추세 종목이었고, 감소 후보에는 `쏠리드`, `한온시스템`, `대우건설`, `성호전자`, `원익IPS`, `현대무벡스`, `로보티즈`가 포함됐다. daily update가 target/sheet와 함께 이 변화표도 자동 생성하도록 연결했다.
+
+### API 호출 효율 개선
+
+daily update의 수집 시작일을 `daily_features` 기준 하나로 잡지 않고, raw 가격과 raw 지수의 시장별 최신일 기준으로 나눴다.
+
+변경:
+
+- KOSPI/KOSDAQ 종목 가격 각각 raw parquet 최신일 + 1일부터 수집한다.
+- KOSPI/KOSDAQ 지수도 각 index parquet 최신일 + 1일부터 수집한다.
+- KRX 빈 응답은 `data_krx/raw/collection_state.json`에 기록한다.
+- 같은 시장/날짜/kind의 빈 응답은 기본 60분 동안 재조회하지 않는다.
+
+2026-05-13 데이터가 들어온 뒤에는 다음 수집 시작일이 모두 `2026-05-14`로 잡힌다. 같은 날 반복 실행 시 2026-05-14 빈 응답은 manifest TTL 때문에 API 재호출 없이 cache 결과로 처리된다.
+
+### Portfolio allocator backtest
+
+종목별 target ratio를 실제 계좌형 basket으로 바꾸는 백테스터를 추가했다.
+
+설정:
+
+- E032 target basket: target ratio 상위 12개
+- MA20/60 basket: MA20/60 추세 통과 종목 중 20일 수익률 상위 12개
+- Buy & Hold basket: 전체 universe 동일비중
+- 종목당 최대 비중: `20%`
+- 총 주식 노출: `90%`
+- 거래비용: 편도 `0.15%`
+- 리밸런싱: 주 1회
+
+결과:
+
+| split | strategy | return | Sharpe | MDD |
+| --- | --- | ---: | ---: | ---: |
+| valid | E032 target basket | 21.0% | 0.76 | -24.9% |
+| valid | MA20/60 basket | 14.5% | 0.53 | -29.0% |
+| valid | Buy & Hold universe | 9.4% | 0.43 | -23.3% |
+| test | MA20/60 basket | 922.2% | 10.69 | -22.1% |
+| test | E032 target basket | 687.0% | 8.62 | -22.6% |
+| test | Buy & Hold universe | 408.3% | 7.35 | -20.3% |
+
+해석:
+
+- valid에서는 E032 target basket이 가장 좋다.
+- test 강한 상승장에서는 MA20/60 basket이 가장 좋다.
+- E032 target basket은 Buy & Hold universe보다 수익률과 Sharpe가 높지만, test에서는 MA20/60보다 약하다.
+- 다음 개선은 E032와 MA20/60 중 regime에 따라 basket 선택을 바꾸는 portfolio-level selector다.
+
+### 운용 사용 설명서 작성
+
+운용 절차가 여러 스크립트와 산출물로 나뉘어 있어 전체 사용 설명서를 추가했다.
+
+문서:
+
+- `docs/operations_guide.md`
+
+포함 내용:
+
+- 매일 장마감 후 실행 명령
+- `trading_sheet`, `current_targets`, `target_changes` 해석법
+- 포트폴리오 allocator 백테스트 실행법
+- KRX 수집 상태와 empty response TTL 설명
+- 수동 재생성 명령
+- 재학습 시 주의점
+- 문제 해결
+- 다음 개발 후보

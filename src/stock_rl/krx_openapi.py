@@ -10,6 +10,13 @@ from typing import Any
 import pandas as pd
 import requests
 
+from stock_rl.collection_state import (
+    clear_empty_response,
+    load_collection_state,
+    mark_empty_response,
+    recently_checked_empty,
+    save_collection_state,
+)
 
 KOSPI_STOCK_DAILY_URL = "http://data-dbg.krx.co.kr/svc/apis/sto/stk_bydd_trd"
 KOSDAQ_STOCK_DAILY_URL = "http://data-dbg.krx.co.kr/svc/apis/sto/ksq_bydd_trd"
@@ -268,6 +275,9 @@ def fetch_stock_prices(
     end: str | None = None,
     cache_dir: str | Path | None = None,
     progress_every: int = 50,
+    refresh_empty_recent_days: int = 7,
+    state_path: str | Path | None = None,
+    empty_cache_ttl_minutes: int = 60,
 ) -> pd.DataFrame:
     end_date = pd.Timestamp(end).date() if end else dt.date.today()
     dates = pd.bdate_range(start=start, end=end_date)
@@ -275,6 +285,7 @@ def fetch_stock_prices(
     cache_path = Path(cache_dir) if cache_dir else None
     if cache_path:
         cache_path.mkdir(parents=True, exist_ok=True)
+    state = load_collection_state(state_path)
     frames: list[pd.DataFrame] = []
     total = len(dates)
     for index, bas_dd in enumerate(dates, start=1):
@@ -283,19 +294,41 @@ def fetch_stock_prices(
         legacy_cache = cache_path / f"{market_key}_{bas_dd_text}.csv" if cache_path else None
         if daily_cache and daily_cache.exists():
             normalized = _read_daily_cache(daily_cache)
+            if normalized.empty and _should_refresh_empty_cache(bas_dd, refresh_empty_recent_days):
+                normalized = _refresh_stock_cache_if_needed(
+                    client,
+                    market_key,
+                    bas_dd,
+                    daily_cache,
+                    state,
+                    state_path,
+                    empty_cache_ttl_minutes,
+                )
         elif legacy_cache and legacy_cache.exists():
             normalized = _read_daily_cache(legacy_cache)
+            if normalized.empty and _should_refresh_empty_cache(bas_dd, refresh_empty_recent_days):
+                normalized = _refresh_stock_cache_if_needed(
+                    client,
+                    market_key,
+                    bas_dd,
+                    daily_cache,
+                    state,
+                    state_path,
+                    empty_cache_ttl_minutes,
+                )
         else:
             raw = client.fetch_stock_daily(market_key, bas_dd)
             normalized = normalize_stock_daily(raw, market=market_key, tickers=None)
             if daily_cache is not None:
                 _write_daily_cache(normalized, daily_cache)
+            _record_cache_result(state, state_path, "stock", market_key, bas_dd_text, normalized)
         wanted = {str(ticker).replace(".KS", "").replace(".KQ", "").zfill(6) for ticker in tickers}
         if not normalized.empty and wanted.difference(set(normalized["ticker"].astype(str).str.zfill(6))):
             raw = client.fetch_stock_daily(market_key, bas_dd)
             normalized = normalize_stock_daily(raw, market=market_key, tickers=None)
             if daily_cache is not None:
                 _write_daily_cache(normalized, daily_cache)
+            _record_cache_result(state, state_path, "stock", market_key, bas_dd_text, normalized)
         if not normalized.empty:
             normalized = normalized[normalized["ticker"].isin(wanted)]
         if not normalized.empty:
@@ -315,6 +348,9 @@ def fetch_index_history(
     index_names: list[str] | None = None,
     cache_dir: str | Path | None = None,
     progress_every: int = 50,
+    refresh_empty_recent_days: int = 7,
+    state_path: str | Path | None = None,
+    empty_cache_ttl_minutes: int = 60,
 ) -> pd.DataFrame:
     end_date = pd.Timestamp(end).date() if end else dt.date.today()
     dates = pd.bdate_range(start=start, end=end_date)
@@ -322,6 +358,7 @@ def fetch_index_history(
     cache_path = Path(cache_dir) if cache_dir else None
     if cache_path:
         cache_path.mkdir(parents=True, exist_ok=True)
+    state = load_collection_state(state_path)
     wanted = set(index_names or [])
     frames: list[pd.DataFrame] = []
     total = len(dates)
@@ -330,11 +367,22 @@ def fetch_index_history(
         daily_cache = cache_path / f"{market_key}_INDEX_{bas_dd_text}.parquet" if cache_path else None
         if daily_cache and daily_cache.exists():
             normalized = _read_daily_cache(daily_cache)
+            if normalized.empty and _should_refresh_empty_cache(bas_dd, refresh_empty_recent_days):
+                normalized = _refresh_index_cache_if_needed(
+                    client,
+                    market_key,
+                    bas_dd,
+                    daily_cache,
+                    state,
+                    state_path,
+                    empty_cache_ttl_minutes,
+                )
         else:
             raw = client.fetch_index_daily(market_key, bas_dd)
             normalized = normalize_index_daily(raw, market_key)
             if daily_cache is not None:
                 _write_daily_cache(normalized, daily_cache)
+            _record_cache_result(state, state_path, "index", market_key, bas_dd_text, normalized)
         if wanted and "index_name" in normalized.columns:
             normalized = normalized[normalized["index_name"].isin(wanted)]
         if not normalized.empty:
@@ -344,3 +392,65 @@ def fetch_index_history(
     if not frames:
         raise ValueError(f"No KRX index data returned for {market}.")
     return pd.concat(frames, ignore_index=True).drop_duplicates(["market", "index_name", "date"], keep="last")
+
+
+def _should_refresh_empty_cache(bas_dd: pd.Timestamp, recent_days: int) -> bool:
+    if recent_days <= 0:
+        return False
+    day = pd.Timestamp(bas_dd).date()
+    return day >= dt.date.today() - dt.timedelta(days=recent_days)
+
+
+def _refresh_stock_cache_if_needed(
+    client: KrxOpenApiClient,
+    market_key: str,
+    bas_dd: pd.Timestamp,
+    daily_cache: Path | None,
+    state: dict,
+    state_path: str | Path | None,
+    empty_cache_ttl_minutes: int,
+) -> pd.DataFrame:
+    bas_dd_text = _format_bas_dd(bas_dd)
+    if recently_checked_empty(state, "stock", market_key, bas_dd_text, empty_cache_ttl_minutes):
+        return pd.DataFrame(columns=["date", "ticker", "open", "high", "low", "close"])
+    raw = client.fetch_stock_daily(market_key, bas_dd)
+    normalized = normalize_stock_daily(raw, market=market_key, tickers=None)
+    if daily_cache is not None:
+        _write_daily_cache(normalized, daily_cache)
+    _record_cache_result(state, state_path, "stock", market_key, bas_dd_text, normalized)
+    return normalized
+
+
+def _refresh_index_cache_if_needed(
+    client: KrxOpenApiClient,
+    market_key: str,
+    bas_dd: pd.Timestamp,
+    daily_cache: Path | None,
+    state: dict,
+    state_path: str | Path | None,
+    empty_cache_ttl_minutes: int,
+) -> pd.DataFrame:
+    bas_dd_text = _format_bas_dd(bas_dd)
+    if recently_checked_empty(state, "index", market_key, bas_dd_text, empty_cache_ttl_minutes):
+        return pd.DataFrame()
+    raw = client.fetch_index_daily(market_key, bas_dd)
+    normalized = normalize_index_daily(raw, market_key)
+    if daily_cache is not None:
+        _write_daily_cache(normalized, daily_cache)
+    _record_cache_result(state, state_path, "index", market_key, bas_dd_text, normalized)
+    return normalized
+
+
+def _record_cache_result(
+    state: dict,
+    state_path: str | Path | None,
+    kind: str,
+    market_key: str,
+    bas_dd_text: str,
+    frame: pd.DataFrame,
+) -> None:
+    if frame.empty:
+        mark_empty_response(state, kind, market_key, bas_dd_text)
+    else:
+        clear_empty_response(state, kind, market_key, bas_dd_text)
+    save_collection_state(state_path, state)

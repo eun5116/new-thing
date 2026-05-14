@@ -49,8 +49,10 @@ def collect_index_series(
     start: str,
     end: str | None = None,
     allow_empty: bool = False,
+    empty_cache_ttl_minutes: int = 60,
 ) -> Path:
     cache_dir = project_path("configs/krx_kospi.yaml", data_dir, "raw", "krx_daily_cache")
+    state_path = project_path("configs/krx_kospi.yaml", data_dir, "raw", "collection_state.json")
     out_dir = project_path("configs/krx_kospi.yaml", data_dir, "raw", "indices")
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{market.lower()}_indices.parquet"
@@ -62,6 +64,8 @@ def collect_index_series(
             end,
             index_names=DEFAULT_INDEX_NAMES[market],
             cache_dir=cache_dir,
+            state_path=state_path,
+            empty_cache_ttl_minutes=empty_cache_ttl_minutes,
         )
     except ValueError as exc:
         if allow_empty and "No KRX index data returned" in str(exc) and path.exists():
@@ -82,6 +86,20 @@ def _merge_index_history(path: Path, frame: pd.DataFrame) -> pd.DataFrame:
     frame = frame.sort_values(["market", "index_name", "date"]).reset_index(drop=True)
     frame.to_parquet(path, index=False)
     return frame
+
+
+def latest_index_date_by_market(data_dir: str) -> dict[str, str]:
+    out_dir = project_path("configs/krx_kospi.yaml", data_dir, "raw", "indices")
+    latest = {}
+    for market in DEFAULT_INDEX_NAMES:
+        path = out_dir / f"{market.lower()}_indices.parquet"
+        if not path.exists():
+            continue
+        frame = pd.read_parquet(path, columns=["date"])
+        if frame.empty:
+            continue
+        latest[market] = pd.to_datetime(frame["date"]).max().date().isoformat()
+    return latest
 
 
 def main() -> None:

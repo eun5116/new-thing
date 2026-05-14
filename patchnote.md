@@ -455,3 +455,110 @@
   - 결과: `18 passed`
   - `PYTHONPATH=src .venv/bin/python -m stock_rl.update_daily_targets --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml --rule strong_trend_full_else070 --skip-collect --skip-features`
   - 추가 테스트 후 결과: `19 passed`
+
+### Recent Empty Cache Refresh
+
+- 수정 파일:
+  - `src/stock_rl/krx_openapi.py`
+  - `daily_log.md`
+- 구현 내용:
+  - `fetch_stock_prices`와 `fetch_index_history`가 최근 7일 안의 empty daily cache를 만나면 KRX API를 다시 조회하도록 했다.
+  - 장중/장마감 전 빈 응답이 cache에 저장된 뒤, 장마감 후에도 빈 cache 때문에 신규 가격을 놓치는 문제를 막는다.
+- 확인:
+  - 장마감 후 daily update 재실행으로 `2026-05-13` 종목 가격과 지수 데이터를 수집했다.
+  - `reports/current_targets_20260513_strong_trend_full_else070.csv`
+  - `reports/trading_sheet_20260513_strong_trend_full_else070.md`
+- 검증:
+  - `PYTHONPATH=src .venv/bin/python -m pytest -q`
+  - 결과: `19 passed`
+
+### Target Change Report
+
+- 추가 파일:
+  - `src/stock_rl/build_target_change_report.py`
+- 수정 파일:
+  - `src/stock_rl/update_daily_targets.py`
+  - `tests/test_features_and_env.py`
+  - `README.md`
+  - `daily_log.md`
+- 구현 내용:
+  - 최신 `current_targets`와 직전 `current_targets`를 비교해 target exposure 변화표를 생성한다.
+  - `target_delta_pct`와 `rebalance_action`을 산출한다.
+  - 기본 threshold는 `5.0%p`이며, 이 이상 증가하면 `increase`, 이 이하 감소하면 `reduce`, 나머지는 `hold`로 분류한다.
+  - daily update 실행 시 target/sheet와 함께 change report도 자동 생성한다.
+- 산출물:
+  - `reports/target_changes_20260513_strong_trend_full_else070.csv`
+  - `reports/target_changes_20260513_strong_trend_full_else070.md`
+- 결과:
+  - 2026-05-11 대비 2026-05-13: increase 11종목, reduce 7종목, hold 30종목
+- 검증:
+  - `PYTHONPATH=src .venv/bin/python -m pytest -q`
+  - 결과: `20 passed`
+
+### Collection State And Market-specific Starts
+
+- 추가 파일:
+  - `src/stock_rl/collection_state.py`
+- 수정 파일:
+  - `src/stock_rl/collect_prices.py`
+  - `src/stock_rl/collect_krx_reference.py`
+  - `src/stock_rl/krx_openapi.py`
+  - `src/stock_rl/update_daily_targets.py`
+  - `tests/test_features_and_env.py`
+  - `README.md`
+  - `daily_log.md`
+- 구현 내용:
+  - raw 종목 가격 parquet의 시장별 최신일을 읽고 KOSPI/KOSDAQ 각각 `latest + 1`부터 수집한다.
+  - raw 지수 parquet도 시장별 최신일을 읽고 각각 `latest + 1`부터 수집한다.
+  - KRX empty response manifest를 `data_krx/raw/collection_state.json`에 기록한다.
+  - 같은 `kind/market/date` empty response는 기본 60분 TTL 안에서 재조회하지 않는다.
+  - daily update 출력에 `stock_starts`, `index_starts`를 추가했다.
+- 확인:
+  - 2026-05-13 데이터 수집 이후 daily update 시작일은 `KOSPI=2026-05-14`, `KOSDAQ=2026-05-14`로 잡힌다.
+  - 2026-05-14 빈 응답은 manifest에 기록된다.
+- 검증:
+  - `PYTHONPATH=src .venv/bin/python -m pytest -q`
+  - 결과: `23 passed`
+
+### Portfolio Allocator Backtest
+
+- 추가 파일:
+  - `src/stock_rl/backtest_portfolio_allocator.py`
+- 수정 파일:
+  - `tests/test_features_and_env.py`
+  - `README.md`
+  - `daily_log.md`
+- 구현 내용:
+  - 종목별 E032 target ratio를 계좌형 basket으로 변환해 일자별 portfolio return을 재생한다.
+  - 공통 설정은 상위 12종목, 종목당 최대 20%, 총 주식 노출 90%, 편도 거래비용 0.15%, 주 1회 리밸런싱이다.
+  - 비교 전략은 전체 universe Buy & Hold, MA20/60 basket, E032 target basket이다.
+  - turnover, total cost, holdings, gross exposure를 함께 기록한다.
+- 산출물:
+  - `reports/portfolio_allocator_valid_metrics.csv`
+  - `reports/portfolio_allocator_valid_trace.csv`
+  - `reports/portfolio_allocator_valid_allocations.csv`
+  - `reports/portfolio_allocator_valid_report.md`
+  - `reports/portfolio_allocator_test_metrics.csv`
+  - `reports/portfolio_allocator_test_trace.csv`
+  - `reports/portfolio_allocator_test_allocations.csv`
+  - `reports/portfolio_allocator_test_report.md`
+- 결과:
+  - valid 1위: E032 target basket, 수익률 21.0%, Sharpe 0.76, MDD -24.9%
+  - test 1위: MA20/60 basket, 수익률 922.2%, Sharpe 10.69, MDD -22.1%
+  - test E032 target basket: 수익률 687.0%, Sharpe 8.62, MDD -22.6%
+- 검증:
+  - `PYTHONPATH=src .venv/bin/python -m pytest -q`
+  - 결과: `24 passed`
+
+### Operations Guide
+
+- 추가 파일:
+  - `docs/operations_guide.md`
+- 수정 파일:
+  - `README.md`
+  - `daily_log.md`
+- 구현 내용:
+  - 매일 장마감 후 실행하는 daily update 흐름을 문서화했다.
+  - `trading_sheet`, `current_targets`, `target_changes` 해석법을 정리했다.
+  - portfolio allocator backtest 실행법과 현재 결과를 정리했다.
+  - KRX API 수집 상태, empty response TTL, 수동 재생성 명령, 문제 해결 절차를 추가했다.
