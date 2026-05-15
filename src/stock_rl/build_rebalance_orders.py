@@ -8,6 +8,7 @@ import pandas as pd
 from stock_rl.backtest_portfolio_allocator import _cap_and_normalize
 from stock_rl.build_trading_sheet import _load_reference, _markdown_table
 from stock_rl.config import project_path
+from stock_rl.report_png import render_rebalance_orders_png
 from stock_rl.trading_env import normalize_ticker
 
 
@@ -131,9 +132,11 @@ def build_rebalance_orders(
     as_of = str(targets["as_of_date"].max()).replace("-", "")
     csv_path = output_dir / f"rebalance_orders_{as_of}_{rule}.csv"
     md_path = output_dir / f"rebalance_orders_{as_of}_{rule}.md"
+    png_path = output_dir / f"rebalance_orders_{as_of}_{rule}.png"
     frame.to_csv(csv_path, index=False)
+    render_rebalance_orders_png(frame, png_path, rule)
     _write_markdown(md_path, frame, resolved_target_path, positions_path, total_value, cash, top_n, gross_cap, max_weight)
-    return {"csv": csv_path, "markdown": md_path}
+    return {"csv": csv_path, "markdown": md_path, "png": png_path}
 
 
 def _write_markdown(
@@ -160,6 +163,7 @@ def _write_markdown(
         f"- top_n: `{top_n}`",
         f"- gross_cap: `{gross_cap * 100.0:.1f}%`",
         f"- max_weight: `{max_weight * 100.0:.1f}%`",
+        f"- png: `{path.with_suffix('.png')}`",
         "",
         "## Buy",
         "",

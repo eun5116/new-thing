@@ -7,6 +7,7 @@ import pandas as pd
 
 from stock_rl.build_trading_sheet import _markdown_table
 from stock_rl.config import project_path
+from stock_rl.report_png import render_decision_sheet_png
 
 
 def _latest_path(config_path: str, pattern: str) -> Path:
@@ -87,9 +88,23 @@ def build_decision_sheet(
     orders = pd.read_csv(rebalance_path, dtype={"ticker": str})
     order_keep = ["ticker", "target_weight_pct", "weight_delta_pct", "order_amount", "order_action"]
     frame = positions.merge(orders[order_keep], how="left", on="ticker")
-    frame[["target_weight_pct", "weight_delta_pct", "order_amount"]] = frame[
-        ["target_weight_pct", "weight_delta_pct", "order_amount"]
-    ].fillna(0.0)
+
+    def _coalesce(name: str, default: float | str = 0.0) -> None:
+        if name in frame.columns:
+            return
+        left = f"{name}_x"
+        right = f"{name}_y"
+        if left in frame.columns or right in frame.columns:
+            frame[name] = frame.get(left, pd.Series(default, index=frame.index)).combine_first(frame.get(right, pd.Series(default, index=frame.index)))
+        else:
+            frame[name] = default
+
+    for column in ["target_weight_pct", "weight_delta_pct", "order_amount", "order_action"]:
+        _coalesce(column, "none" if column == "order_action" else 0.0)
+
+    frame["target_weight_pct"] = pd.to_numeric(frame["target_weight_pct"], errors="coerce").fillna(0.0)
+    frame["weight_delta_pct"] = pd.to_numeric(frame["weight_delta_pct"], errors="coerce").fillna(0.0)
+    frame["order_amount"] = pd.to_numeric(frame["order_amount"], errors="coerce").fillna(0.0)
     frame["order_action"] = frame["order_action"].fillna("none")
 
     decisions = frame.apply(_decision, axis=1, result_type="expand")
@@ -118,9 +133,11 @@ def build_decision_sheet(
     as_of = pd.Timestamp.today().strftime("%Y%m%d")
     csv_path = output_dir / f"portfolio_decision_sheet_{as_of}.csv"
     md_path = output_dir / f"portfolio_decision_sheet_{as_of}.md"
+    png_path = output_dir / f"portfolio_decision_sheet_{as_of}.png"
     frame.to_csv(csv_path, index=False)
+    render_decision_sheet_png(frame, png_path)
     _write_markdown(md_path, frame, position_path, rebalance_path)
-    return {"csv": csv_path, "markdown": md_path}
+    return {"csv": csv_path, "markdown": md_path, "png": png_path}
 
 
 def _write_markdown(path: Path, frame: pd.DataFrame, position_path: Path, rebalance_path: Path) -> None:
@@ -129,6 +146,7 @@ def _write_markdown(path: Path, frame: pd.DataFrame, position_path: Path, rebala
         "",
         f"- positions: `{position_path}`",
         f"- rebalance: `{rebalance_path}`",
+        f"- png: `{path.with_suffix('.png')}`",
         f"- holdings: `{len(frame)}`",
         "",
         "## Action Summary",

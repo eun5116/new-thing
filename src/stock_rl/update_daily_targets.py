@@ -43,7 +43,7 @@ def infer_market_collection_starts(config_path: str | Path) -> dict[str, str]:
 
 def infer_index_collection_starts(config_path: str | Path) -> dict[str, str]:
     config = load_config(config_path)
-    latest = latest_index_date_by_market(config["project"]["data_dir"])
+    latest = latest_index_date_by_market(config["project"]["data_dir"], config_path=config_path)
     starts = {}
     for market in _config_markets(config):
         latest_date = latest.get(market)
@@ -120,6 +120,7 @@ def update_daily_targets(
                     index_starts[market],
                     end=end,
                     allow_empty=True,
+                    config_path=config_path,
                 )
             )
     feature_paths = {}
@@ -179,9 +180,13 @@ def main() -> None:
     print(f"target: {result['target_path']}")
     print(f"sheet_csv: {result['sheet_paths']['csv']}")
     print(f"sheet_markdown: {result['sheet_paths']['markdown']}")
+    if result["sheet_paths"].get("png"):
+        print(f"sheet_png: {result['sheet_paths']['png']}")
     if result["change_paths"]:
         print(f"changes_csv: {result['change_paths']['csv']}")
         print(f"changes_markdown: {result['change_paths']['markdown']}")
+        if result["change_paths"].get("png"):
+            print(f"changes_png: {result['change_paths']['png']}")
     print(
         "summary: "
         f"as_of={summary['as_of_date']} "

@@ -30,11 +30,17 @@ def _latest_market_day(client: KrxOpenApiClient, market: str, end: str | None = 
     raise ValueError(f"No {market} issue base data found in the last {lookback_days} days.")
 
 
-def collect_issue_base(client: KrxOpenApiClient, data_dir: str, market: str, bas_dd: str | None = None) -> Path:
+def collect_issue_base(
+    client: KrxOpenApiClient,
+    data_dir: str,
+    market: str,
+    bas_dd: str | None = None,
+    config_path: str | Path = "configs/krx_kospi.yaml",
+) -> Path:
     day = bas_dd or _latest_market_day(client, market)
     raw = client.fetch_issue_base(market, day)
     frame = normalize_issue_base(raw, market)
-    out_dir = project_path("configs/krx_kospi.yaml", data_dir, "raw", "reference")
+    out_dir = project_path(config_path, data_dir, "raw", "reference")
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{market.lower()}_issue_base.parquet"
     frame.to_parquet(path, index=False)
@@ -50,10 +56,11 @@ def collect_index_series(
     end: str | None = None,
     allow_empty: bool = False,
     empty_cache_ttl_minutes: int = 60,
+    config_path: str | Path = "configs/krx_kospi.yaml",
 ) -> Path:
-    cache_dir = project_path("configs/krx_kospi.yaml", data_dir, "raw", "krx_daily_cache")
-    state_path = project_path("configs/krx_kospi.yaml", data_dir, "raw", "collection_state.json")
-    out_dir = project_path("configs/krx_kospi.yaml", data_dir, "raw", "indices")
+    cache_dir = project_path(config_path, data_dir, "raw", "krx_daily_cache")
+    state_path = project_path(config_path, data_dir, "raw", "collection_state.json")
+    out_dir = project_path(config_path, data_dir, "raw", "indices")
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{market.lower()}_indices.parquet"
     try:
@@ -88,8 +95,8 @@ def _merge_index_history(path: Path, frame: pd.DataFrame) -> pd.DataFrame:
     return frame
 
 
-def latest_index_date_by_market(data_dir: str) -> dict[str, str]:
-    out_dir = project_path("configs/krx_kospi.yaml", data_dir, "raw", "indices")
+def latest_index_date_by_market(data_dir: str, config_path: str | Path = "configs/krx_kospi.yaml") -> dict[str, str]:
+    out_dir = project_path(config_path, data_dir, "raw", "indices")
     latest = {}
     for market in DEFAULT_INDEX_NAMES:
         path = out_dir / f"{market.lower()}_indices.parquet"

@@ -7,6 +7,7 @@ import pandas as pd
 
 from stock_rl.build_trading_sheet import _load_reference, _markdown_table
 from stock_rl.config import project_path
+from stock_rl.report_png import render_target_changes_png
 from stock_rl.trading_env import normalize_ticker
 
 
@@ -100,9 +101,11 @@ def build_target_change_report(
     as_of = str(current["as_of_date"].max()).replace("-", "")
     csv_path = output_dir / f"target_changes_{as_of}_{rule}.csv"
     md_path = output_dir / f"target_changes_{as_of}_{rule}.md"
+    png_path = output_dir / f"target_changes_{as_of}_{rule}.png"
     frame.to_csv(csv_path, index=False)
+    render_target_changes_png(frame, png_path, rule)
     _write_markdown(md_path, frame, rule, current_path, previous_path, threshold_pct)
-    return {"csv": csv_path, "markdown": md_path}
+    return {"csv": csv_path, "markdown": md_path, "png": png_path}
 
 
 def _write_markdown(path: Path, frame: pd.DataFrame, rule: str, current_path: Path, previous_path: Path, threshold_pct: float) -> None:
@@ -114,6 +117,7 @@ def _write_markdown(path: Path, frame: pd.DataFrame, rule: str, current_path: Pa
         f"- rule: `{rule}`",
         f"- current: `{current_path}`",
         f"- previous: `{previous_path}`",
+        f"- png: `{path.with_suffix('.png')}`",
         f"- threshold: `{threshold_pct:.1f}%`",
         f"- increase count: `{int((frame['rebalance_action'] == 'increase').sum())}`",
         f"- reduce count: `{int((frame['rebalance_action'] == 'reduce').sum())}`",

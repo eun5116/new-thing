@@ -256,6 +256,7 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.build_rebalance_orders \
 ```text
 reports/rebalance_orders_YYYYMMDD_strong_trend_full_else070.csv
 reports/rebalance_orders_YYYYMMDD_strong_trend_full_else070.md
+reports/rebalance_orders_YYYYMMDD_strong_trend_full_else070.png
 ```
 
 주의:
@@ -289,6 +290,7 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.analyze_positions \
 ```text
 reports/current_position_analysis_YYYYMMDD.csv
 reports/current_position_analysis_YYYYMMDD.md
+reports/current_position_analysis_YYYYMMDD.png
 ```
 
 이 분석은 아래를 포함한다.

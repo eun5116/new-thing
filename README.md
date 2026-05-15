@@ -77,6 +77,7 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.update_daily_targets \
 ```text
 reports/target_changes_YYYYMMDD_strong_trend_full_else070.csv
 reports/target_changes_YYYYMMDD_strong_trend_full_else070.md
+reports/target_changes_YYYYMMDD_strong_trend_full_else070.png
 ```
 
 KRX가 아직 특정 일자의 데이터를 공개하지 않아 빈 응답을 반환하면 `data_krx/raw/collection_state.json`에 기록합니다. 같은 빈 응답은 기본 60분 동안 재조회하지 않아, 같은 날 반복 실행할 때 API 호출을 줄입니다.
@@ -118,6 +119,12 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.build_rebalance_orders \
   --cash 0
 ```
 
+```text
+reports/rebalance_orders_YYYYMMDD_strong_trend_full_else070.csv
+reports/rebalance_orders_YYYYMMDD_strong_trend_full_else070.md
+reports/rebalance_orders_YYYYMMDD_strong_trend_full_else070.png
+```
+
 현재 모델 universe 밖 자산은 `out_of_universe`로 표시되며 target weight는 0으로 계산됩니다. 이는 자동 매도 지시가 아니라 모델이 평가하지 않는 자산이라는 의미입니다.
 
 현재 보유종목 자체의 손익, 비중, 모델 universe 여부, 한국 주식 추세를 보려면 아래를 실행합니다.
@@ -131,11 +138,34 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.analyze_positions \
   --krx-start 2025-01-01
 ```
 
+```text
+reports/current_position_analysis_YYYYMMDD.csv
+reports/current_position_analysis_YYYYMMDD.md
+reports/current_position_analysis_YYYYMMDD.png
+```
+
 분석 결과와 리밸런싱 후보를 합친 한 장짜리 의사결정표는 아래로 생성합니다.
 
 ```bash
 PYTHONPATH=src .venv/bin/python -m stock_rl.build_portfolio_decision_sheet \
   --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml
+```
+
+```text
+reports/portfolio_decision_sheet_YYYYMMDD.csv
+reports/portfolio_decision_sheet_YYYYMMDD.md
+reports/portfolio_decision_sheet_YYYYMMDD.png
+```
+
+보고서 묶음 대시보드는 아래 명령으로 생성합니다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.build_report_dashboard \
+  --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml
+```
+
+```text
+reports/report_dashboard_YYYYMMDD.png
 ```
 
 ## 이벤트 CSV 스키마

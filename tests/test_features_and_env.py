@@ -1,6 +1,10 @@
 import pandas as pd
+import matplotlib.pyplot as plt
 
 from stock_rl.build_features import add_event_features, add_market_features, add_price_features, split_and_write
+from stock_rl.build_report_dashboard import build_report_dashboard
+from stock_rl.build_portfolio_decision_sheet import build_decision_sheet
+from stock_rl.build_trading_sheet import build_trading_sheet
 from stock_rl.build_rebalance_orders import build_rebalance_orders
 from stock_rl.build_target_change_report import build_target_change_report
 from stock_rl.backtest_portfolio_allocator import simulate_portfolio
@@ -299,6 +303,63 @@ def test_build_target_change_report_compares_previous_target(tmp_path):
     assert set(changes["rebalance_action"]) == {"increase", "reduce"}
     assert changes.loc[changes["ticker"] == "000001", "target_delta_pct"].iloc[0] == 12.0
     assert changes.loc[changes["ticker"] == "000002", "target_delta_pct"].iloc[0] == -30.0
+    assert result["png"].exists()
+    assert result["png"].stat().st_size > 0
+
+
+def test_build_trading_sheet_writes_png_snapshot(tmp_path):
+    project = tmp_path / "project"
+    config_dir = project / "configs"
+    reports_dir = project / "reports"
+    processed_dir = project / "data_krx" / "processed"
+    reference_dir = project / "data_krx" / "raw" / "reference"
+    config_dir.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+    processed_dir.mkdir(parents=True)
+    reference_dir.mkdir(parents=True)
+    config_path = config_dir / "test.yaml"
+    config_path.write_text(
+        "project:\n"
+        "  data_dir: data_krx\n",
+        encoding="utf-8",
+    )
+    features = add_price_features(sample_prices()).dropna().reset_index(drop=True)
+    features["market"] = "KOSPI"
+    features["change_pct"] = 0.0
+    features.to_parquet(processed_dir / "daily_features.parquet", index=False)
+    pd.DataFrame({"ticker": ["SPY"], "abbrv": ["SPY"], "market": ["KOSPI"]}).to_parquet(
+        reference_dir / "kospi_issue_base.parquet",
+        index=False,
+    )
+    target_path = reports_dir / "current_targets_20260513_strong_trend_full_else070.csv"
+    pd.DataFrame(
+        {
+            "as_of_date": ["2026-05-13"],
+            "feature_date": ["2026-05-13"],
+            "ticker": ["SPY"],
+            "rule": ["strong_trend_full_else070"],
+            "model_name": ["model"],
+            "assumed_position_ratio": [0.0],
+            "action": [5],
+            "raw_target_ratio": [1.0],
+            "cap": [1.0],
+            "cap_reason": ["strong_trend"],
+            "target_ratio": [1.0],
+            "market_return_60d": [0.1],
+            "market_return_120d": [0.1],
+            "market_ma60_gap": [0.1],
+            "market_ma120_gap": [0.1],
+            "relative_strength_20d": [0.1],
+            "return_20d": [0.2],
+            "return_60d": [0.3],
+            "drawdown_60d": [0.0],
+        }
+    ).to_csv(target_path, index=False)
+
+    result = build_trading_sheet(str(config_path), target_path=str(target_path))
+
+    assert result["png"].exists()
+    assert result["png"].stat().st_size > 0
 
 
 def test_collection_state_tracks_recent_empty_response(tmp_path):
@@ -389,6 +450,76 @@ def test_build_rebalance_orders_marks_out_of_universe_holdings(tmp_path):
     assert orders.loc[orders["ticker"] == "000001", "asset_scope"].iloc[0] == "model_universe"
     assert orders.loc[orders["ticker"] == "NVDA", "asset_scope"].iloc[0] == "out_of_universe"
     assert orders.loc[orders["ticker"] == "NVDA", "target_weight_pct"].iloc[0] == 0.0
+    assert result["png"].exists()
+    assert result["png"].stat().st_size > 0
+
+
+def test_build_decision_sheet_writes_png_snapshot(tmp_path):
+    project = tmp_path / "project"
+    config_dir = project / "configs"
+    reports_dir = project / "reports"
+    config_dir.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+    config_path = config_dir / "test.yaml"
+    config_path.write_text(
+        "project:\n"
+        "  data_dir: data_krx\n",
+        encoding="utf-8",
+    )
+    pd.DataFrame(
+        {
+            "ticker": ["000001", "NVDA"],
+            "name": ["테스트", "엔비디아"],
+            "asset_scope": ["model_universe", "us_or_global"],
+            "current_weight_pct": [11.28, 13.37],
+            "pnl_pct": [34.92, 16.63],
+            "trend_status": ["uptrend", "uptrend"],
+            "return_20d_pct": [41.29, 19.04],
+            "drawdown_60d_pct": [-0.53, 0.0],
+            "volatility_20d_pct": [61.39, 40.61],
+        }
+    ).to_csv(reports_dir / "current_position_analysis_20260515.csv", index=False)
+    pd.DataFrame(
+        {
+            "ticker": ["000001", "NVDA"],
+            "target_weight_pct": [7.5, 0.0],
+            "weight_delta_pct": [-3.78, -13.37],
+            "order_amount": [-95101.0, -336720.0],
+            "order_action": ["sell", "sell"],
+        }
+    ).to_csv(reports_dir / "rebalance_orders_20260514_strong_trend_full_else070.csv", index=False)
+
+    result = build_decision_sheet(str(config_path))
+
+    assert result["png"].exists()
+    assert result["png"].stat().st_size > 0
+
+
+def test_build_report_dashboard_writes_png_snapshot(tmp_path):
+    reports_dir = tmp_path / "project" / "reports"
+    reports_dir.mkdir(parents=True)
+    config_path = tmp_path / "project" / "configs" / "test.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("project:\n  data_dir: data_krx\n", encoding="utf-8")
+
+    names = [
+        "trading_sheet_20260514_strong_trend_full_else070.png",
+        "target_changes_20260514_strong_trend_full_else070.png",
+        "rebalance_orders_20260514_strong_trend_full_else070.png",
+        "current_position_analysis_20260515.png",
+        "portfolio_decision_sheet_20260515.png",
+    ]
+    for name in names:
+        fig = plt.figure(figsize=(1, 1))
+        plt.plot([0, 1], [0, 1])
+        fig.savefig(reports_dir / name, dpi=60)
+        plt.close(fig)
+
+    result = build_report_dashboard(str(config_path))
+
+    assert result is not None
+    assert result["png"].exists()
+    assert result["png"].stat().st_size > 0
 
 
 def test_add_event_features_supports_all_market_events():

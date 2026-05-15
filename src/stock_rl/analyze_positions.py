@@ -10,6 +10,7 @@ from stock_rl.build_trading_sheet import _load_reference, _markdown_table
 from stock_rl.config import project_path
 from stock_rl.collect_prices import fetch_yfinance
 from stock_rl.krx_openapi import KrxOpenApiClient, fetch_stock_prices
+from stock_rl.report_png import render_position_analysis_png
 from stock_rl.trading_env import normalize_ticker
 
 
@@ -209,9 +210,11 @@ def analyze_positions(
     as_of = pd.Timestamp.today().strftime("%Y%m%d")
     csv_path = output_dir / f"current_position_analysis_{as_of}.csv"
     md_path = output_dir / f"current_position_analysis_{as_of}.md"
+    png_path = output_dir / f"current_position_analysis_{as_of}.png"
     result.to_csv(csv_path, index=False)
+    render_position_analysis_png(result, png_path)
     _write_markdown(md_path, result, positions_path, total_value)
-    return {"csv": csv_path, "markdown": md_path}
+    return {"csv": csv_path, "markdown": md_path, "png": png_path}
 
 
 def _note_for_position(ticker: str, model_universe: set[str], reference_tickers: set[str]) -> str:
@@ -234,6 +237,7 @@ def _write_markdown(path: Path, frame: pd.DataFrame, positions_path: str, total_
         f"- model_universe_holdings: `{int((frame['asset_scope'] == 'model_universe').sum())}`",
         f"- krx_stock_outside_model: `{int((frame['asset_scope'] == 'krx_stock_outside_model').sum())}`",
         f"- out_of_model_holdings: `{int((frame['asset_scope'] != 'model_universe').sum())}`",
+        f"- png: `{path.with_suffix('.png')}`",
         "",
         "## Holdings",
         "",

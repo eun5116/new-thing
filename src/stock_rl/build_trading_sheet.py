@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from stock_rl.config import load_config, project_path
+from stock_rl.report_png import render_trading_sheet_png
 from stock_rl.trading_env import normalize_ticker
 
 
@@ -127,6 +128,7 @@ def build_trading_sheet(
     sheet["target_pct"] = _pct(sheet["target_ratio"])
     sheet["raw_target_pct"] = _pct(sheet["raw_target_ratio"])
     sheet["cap_pct"] = _pct(sheet["cap"])
+    sheet["change_pct"] = pd.to_numeric(sheet.get("change_pct", 0.0), errors="coerce").fillna(0.0)
     sheet["return_20d_pct"] = _pct(sheet["return_20d"])
     sheet["return_60d_pct"] = _pct(sheet["return_60d"])
     sheet["relative_strength_20d_pct"] = _pct(sheet["relative_strength_20d"])
@@ -147,9 +149,11 @@ def build_trading_sheet(
     as_of = targets["as_of_date"].max().strftime("%Y%m%d")
     csv_path = output_dir / f"trading_sheet_{as_of}_{rule}.csv"
     md_path = output_dir / f"trading_sheet_{as_of}_{rule}.md"
+    png_path = output_dir / f"trading_sheet_{as_of}_{rule}.png"
     sheet.to_csv(csv_path, index=False)
+    render_trading_sheet_png(sheet, png_path, rule)
     _write_markdown(md_path, sheet, rule, resolved_target_path)
-    return {"csv": csv_path, "markdown": md_path}
+    return {"csv": csv_path, "markdown": md_path, "png": png_path}
 
 
 def _write_markdown(path: Path, sheet: pd.DataFrame, rule: str, target_path: Path) -> None:
@@ -159,6 +163,7 @@ def _write_markdown(path: Path, sheet: pd.DataFrame, rule: str, target_path: Pat
         "",
         f"- rule: `{rule}`",
         f"- source: `{target_path}`",
+        f"- png: `{path.with_suffix('.png')}`",
         f"- tickers: `{len(sheet)}`",
         f"- avg target: `{sheet['target_pct'].mean():.1f}%`",
         f"- full target count: `{int((sheet['target_pct'] == 100.0).sum())}`",
