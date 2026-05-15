@@ -125,7 +125,7 @@ def add_price_features(prices: pd.DataFrame, price_col: str = "adj_close") -> pd
         g["ma120_gap"] = px / px.rolling(120).mean() - 1.0
         g["volatility_20d"] = ret_1d.rolling(20).std() * np.sqrt(252)
         g["volatility_60d"] = ret_1d.rolling(60).std() * np.sqrt(252)
-        g["volume_change"] = volume.pct_change().replace([np.inf, -np.inf], np.nan)
+        g["volume_change"] = volume.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan)
         gain = ret_1d.clip(lower=0.0)
         loss = -ret_1d.clip(upper=0.0)
         rs = gain.rolling(14).mean() / loss.rolling(14).mean()
@@ -145,9 +145,9 @@ def add_price_features(prices: pd.DataFrame, price_col: str = "adj_close") -> pd
         g["volume_zscore_20d"] = (volume - volume_mean_20) / volume_std_20
         trading_value_mean_20 = trading_value.rolling(20).mean()
         trading_value_std_20 = trading_value.rolling(20).std()
-        g["trading_value_change"] = trading_value.pct_change().replace([np.inf, -np.inf], np.nan)
+        g["trading_value_change"] = trading_value.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan)
         g["trading_value_zscore_20d"] = (trading_value - trading_value_mean_20) / trading_value_std_20
-        g["market_cap_change"] = market_cap.pct_change().replace([np.inf, -np.inf], np.nan)
+        g["market_cap_change"] = market_cap.pct_change(fill_method=None).replace([np.inf, -np.inf], np.nan)
         g["market_cap_ma60_gap"] = market_cap / market_cap.rolling(60).mean() - 1.0
         g["turnover_value_ratio"] = trading_value / market_cap.replace(0, np.nan)
         ma20 = px.rolling(20).mean()

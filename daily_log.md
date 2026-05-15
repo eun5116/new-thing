@@ -530,3 +530,130 @@ daily update의 수집 시작일을 `daily_features` 기준 하나로 잡지 않
 - 재학습 시 주의점
 - 문제 해결
 - 다음 개발 후보
+
+## 2026-05-15
+
+### 카카오페이 보유 포지션 입력
+
+사용자가 제공한 카카오페이증권 보유 내역을 CSV로 저장했다.
+
+파일:
+
+- `data_krx/raw/positions/current_positions.csv`
+
+현재 입력에는 KRX 개별주, 국내 ETF, 미국 주식, 금 ETF가 섞여 있다. 현재 모델 universe는 KRX 48종목이므로, universe 밖 자산은 별도 `out_of_universe`로 표시해야 한다.
+
+### Rebalance orders 생성기 추가
+
+실제 보유비중과 모델 allocator 목표비중을 비교하는 주문 후보표를 추가했다.
+
+구현:
+
+- `src/stock_rl/build_rebalance_orders.py`
+
+산출물:
+
+- `reports/rebalance_orders_20260513_strong_trend_full_else070.csv`
+- `reports/rebalance_orders_20260513_strong_trend_full_else070.md`
+
+설정:
+
+- top_n: 12
+- gross cap: 90%
+- max weight: 20%
+- min order amount: 5,000원
+- cash: 0원 가정
+
+현재 포지션 기준:
+
+- 총 평가금액: 약 `2,518,650원`
+- 모델 universe 보유: 삼성전자
+- universe 밖 보유: 삼성전자우, 국내 ETF, 미국 주식, GLD 등
+
+주의:
+
+- universe 밖 자산은 모델 기준 target weight가 0으로 나온다.
+- 이것은 자동 매도 지시가 아니라 현재 모델이 평가하지 않는 자산이라는 의미다.
+- 미국 주식/ETF까지 함께 운용하려면 별도 universe와 데이터 파이프라인이 필요하다.
+
+### 보유종목 전용 분석표 생성
+
+현재 보유종목을 모델 universe 여부와 별개로 분석하는 스크립트를 추가했다.
+
+구현:
+
+- `src/stock_rl/analyze_positions.py`
+
+산출물:
+
+- `reports/current_position_analysis_20260515.csv`
+- `reports/current_position_analysis_20260515.md`
+
+한국 주식 3개는 KRX 가격 히스토리를 `2025-01-01`부터 받아 추세/모멘텀/drawdown을 붙였다.
+
+요약:
+
+| ticker | 종목 | 구분 | 손익률 | 추세 | 20일 수익률 | 60일 drawdown | 모델 target |
+| --- | --- | --- | ---: | --- | ---: | ---: | ---: |
+| 005930 | 삼성전자 | model universe | 34.9% | uptrend | 41.3% | -0.5% | 100.0% |
+| 005935 | 삼성전자우 | KRX stock outside model | 6.1% | uptrend | 36.5% | -3.0% | 없음 |
+| 001510 | SK증권 | KRX stock outside model | -19.7% | uptrend | 140.2% | -20.7% | 없음 |
+
+ETF와 미국 주식은 현재 모델 target이 없으므로 손익/비중 중심으로 표시한다.
+
+### 미국/글로벌 보유자산 yfinance 분석 추가
+
+`analyze_positions.py`를 확장해 미국 ticker는 yfinance에서 가격을 받아 `data_krx/raw/position_prices_us/`에 저장하고, 같은 feature 계산으로 추세/모멘텀/drawdown을 붙이게 했다.
+
+산출물:
+
+- `data_krx/raw/position_prices_us/AMD.parquet`
+- `data_krx/raw/position_prices_us/COP.parquet`
+- `data_krx/raw/position_prices_us/DVN.parquet`
+- `data_krx/raw/position_prices_us/GLD.parquet`
+- `data_krx/raw/position_prices_us/IONQ.parquet`
+- `data_krx/raw/position_prices_us/NVDA.parquet`
+- `data_krx/raw/position_prices_us/QUBT.parquet`
+- `reports/current_position_analysis_20260515.md`
+
+현재 미국/글로벌 자산 요약:
+
+| ticker | 비중 | 손익률 | 추세 | 20일 수익률 | 60일 drawdown | 20일 변동성 |
+| --- | ---: | ---: | --- | ---: | ---: | ---: |
+| AMD | 26.4% | 2.0% | uptrend | 62.1% | -1.7% | 98.2% |
+| GLD | 25.5% | 2.8% | downtrend | -2.3% | -12.3% | 21.7% |
+| NVDA | 13.4% | 16.6% | uptrend | 19.0% | 0.0% | 40.6% |
+| COP | 7.0% | -10.6% | downtrend | -1.8% | -10.8% | 37.0% |
+| IONQ | 3.3% | 2.3% | uptrend | 27.4% | 0.0% | 91.1% |
+| DVN | 2.8% | -0.1% | uptrend | 2.4% | -10.0% | 43.5% |
+| QUBT | 0.7% | -18.4% | uptrend | 26.5% | 0.0% | 101.0% |
+
+해석상 주의:
+
+- 미국/글로벌 자산에는 E032 target을 적용하지 않는다.
+- 현재는 추세, 수익률, drawdown, 변동성 중심의 risk 분석만 한다.
+- AMD와 GLD 비중이 각각 25% 이상이라 전체 포트폴리오 집중도 측면에서 따로 봐야 한다.
+
+### Portfolio decision sheet 추가
+
+보유종목 분석표와 리밸런싱 주문 후보표를 합쳐 action label을 부여하는 한 장짜리 의사결정표를 추가했다.
+
+구현:
+
+- `src/stock_rl/build_portfolio_decision_sheet.py`
+
+산출물:
+
+- `reports/portfolio_decision_sheet_20260515.csv`
+- `reports/portfolio_decision_sheet_20260515.md`
+
+현재 분류:
+
+- `trim_candidate`: AMD, GLD, COP
+- `trim_to_allocator`: 삼성전자
+- `speculative_watch`: IONQ, QUBT
+- `keep_watch`: NVDA, 삼성전자우, DVN
+- `watch_or_trim`: SK증권
+- `manual_review`: KODEX/TIGER ETF
+
+이 label은 자동 주문이 아니라, 기존 분석 결과를 빠르게 읽기 위한 규칙 기반 요약이다.

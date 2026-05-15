@@ -562,3 +562,92 @@
   - `trading_sheet`, `current_targets`, `target_changes` 해석법을 정리했다.
   - portfolio allocator backtest 실행법과 현재 결과를 정리했다.
   - KRX API 수집 상태, empty response TTL, 수동 재생성 명령, 문제 해결 절차를 추가했다.
+
+## 2026-05-15 Position-aware Rebalance
+
+- 추가 파일:
+  - `data_krx/raw/positions/current_positions.csv`
+  - `src/stock_rl/build_rebalance_orders.py`
+- 수정 파일:
+  - `src/stock_rl/build_trading_sheet.py`
+  - `tests/test_features_and_env.py`
+  - `README.md`
+  - `docs/operations_guide.md`
+  - `daily_log.md`
+- 구현 내용:
+  - 카카오페이증권 보유 내역 CSV를 저장했다.
+  - 최신 `current_targets`를 top_n/gross_cap/max_weight allocator 목표비중으로 변환한다.
+  - 현재 보유비중과 목표비중의 차이를 계산해 buy/sell/hold 후보를 만든다.
+  - 모델 universe 밖 자산은 `out_of_universe`로 표시하고 target weight를 0으로 둔다.
+  - reference 파일에 `abbrv`만 있고 `name`이 없는 경우 `_load_reference`가 실패하던 문제를 고쳤다.
+- 산출물:
+  - `reports/rebalance_orders_20260513_strong_trend_full_else070.csv`
+  - `reports/rebalance_orders_20260513_strong_trend_full_else070.md`
+- 검증:
+  - `PYTHONPATH=src .venv/bin/python -m pytest -q`
+  - 결과: `25 passed`
+
+### Current Position Analysis
+
+- 추가 파일:
+  - `src/stock_rl/analyze_positions.py`
+- 수정 파일:
+  - `README.md`
+  - `docs/operations_guide.md`
+  - `daily_log.md`
+- 구현 내용:
+  - 보유종목별 현재 비중, 손익률, 모델 universe 여부, 모델 target 여부를 분석한다.
+  - KRX reference에 잡히는 한국 주식은 별도 가격 히스토리를 받아 MA20/60 추세, 20일/60일 수익률, 60일 drawdown을 계산한다.
+  - KRX ETF/unmapped, US/global asset은 현재 모델 target unavailable로 표시한다.
+- 산출물:
+  - `reports/current_position_analysis_20260515.csv`
+  - `reports/current_position_analysis_20260515.md`
+- 확인:
+  - 삼성전자: model universe, target 100%, uptrend
+  - 삼성전자우: KRX stock outside model, uptrend
+  - SK증권: KRX stock outside model, uptrend이지만 60일 drawdown -20.7%
+- 검증:
+  - `PYTHONPATH=src .venv/bin/python -m pytest -q`
+  - 결과: `25 passed`
+
+### US Position Trend Analysis
+
+- 수정 파일:
+  - `src/stock_rl/analyze_positions.py`
+  - `src/stock_rl/build_features.py`
+  - `README.md`
+  - `docs/operations_guide.md`
+  - `daily_log.md`
+- 구현 내용:
+  - 미국/글로벌 ticker는 yfinance로 일봉을 받아 `data_krx/raw/position_prices_us/`에 저장한다.
+  - 미국/글로벌 보유자산에도 MA20/60 추세, 20일/60일/120일 수익률, 60일 drawdown, 20일 변동성을 붙인다.
+  - yfinance 데이터처럼 거래대금/시총이 없는 경우 발생하던 pandas `pct_change` FutureWarning을 제거했다.
+- 산출물:
+  - `reports/current_position_analysis_20260515.csv`
+  - `reports/current_position_analysis_20260515.md`
+- 확인:
+  - AMD, NVDA, IONQ, DVN, QUBT는 uptrend
+  - GLD, COP는 downtrend
+  - AMD와 GLD는 각각 포트폴리오 비중 25% 이상
+- 검증:
+  - `PYTHONPATH=src .venv/bin/python -m pytest -q`
+  - 결과: `25 passed`
+
+### Portfolio Decision Sheet
+
+- 추가 파일:
+  - `src/stock_rl/build_portfolio_decision_sheet.py`
+- 수정 파일:
+  - `README.md`
+  - `docs/operations_guide.md`
+  - `daily_log.md`
+- 구현 내용:
+  - `current_position_analysis`와 `rebalance_orders`를 합쳐 보유종목별 action label을 생성한다.
+  - label은 `trim_candidate`, `trim_to_allocator`, `keep_watch`, `speculative_watch`, `manual_review`, `watch_or_trim` 등이다.
+  - 모델 universe 밖 자산은 trend/risk 규칙으로만 판단한다.
+- 산출물:
+  - `reports/portfolio_decision_sheet_20260515.csv`
+  - `reports/portfolio_decision_sheet_20260515.md`
+- 검증:
+  - `PYTHONPATH=src .venv/bin/python -m pytest -q`
+  - 결과: `25 passed`

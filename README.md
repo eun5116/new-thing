@@ -96,6 +96,48 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.backtest_portfolio_allocator \
   --rebalance-frequency weekly
 ```
 
+## 실제 보유 포지션 반영
+
+카카오페이증권 등에서 가져온 보유 내역은 아래 CSV 포맷으로 저장합니다.
+
+```text
+data_krx/raw/positions/current_positions.csv
+```
+
+리밸런싱 주문 후보표는 아래 명령으로 생성합니다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.build_rebalance_orders \
+  --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml \
+  --positions data_krx/raw/positions/current_positions.csv \
+  --rule strong_trend_full_else070 \
+  --top-n 12 \
+  --gross-cap 0.90 \
+  --max-weight 0.20 \
+  --min-order-amount 5000 \
+  --cash 0
+```
+
+현재 모델 universe 밖 자산은 `out_of_universe`로 표시되며 target weight는 0으로 계산됩니다. 이는 자동 매도 지시가 아니라 모델이 평가하지 않는 자산이라는 의미입니다.
+
+현재 보유종목 자체의 손익, 비중, 모델 universe 여부, 한국 주식 추세를 보려면 아래를 실행합니다.
+미국 주식/글로벌 ETF는 yfinance 가격으로 추세와 drawdown을 붙입니다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.analyze_positions \
+  --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml \
+  --positions data_krx/raw/positions/current_positions.csv \
+  --rule strong_trend_full_else070 \
+  --krx-start 2025-01-01
+```
+
+분석 결과와 리밸런싱 후보를 합친 한 장짜리 의사결정표는 아래로 생성합니다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.build_portfolio_decision_sheet \
+  --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml
+```
+
 ## 이벤트 CSV 스키마
 
 `data/raw/events/events.csv`는 아래 컬럼을 사용합니다.

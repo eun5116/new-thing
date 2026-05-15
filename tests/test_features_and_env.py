@@ -1,6 +1,7 @@
 import pandas as pd
 
 from stock_rl.build_features import add_event_features, add_market_features, add_price_features, split_and_write
+from stock_rl.build_rebalance_orders import build_rebalance_orders
 from stock_rl.build_target_change_report import build_target_change_report
 from stock_rl.backtest_portfolio_allocator import simulate_portfolio
 from stock_rl.collection_state import load_collection_state, mark_empty_response, recently_checked_empty, save_collection_state
@@ -329,6 +330,65 @@ def test_simulate_portfolio_respects_gross_cap_and_costs():
     assert trace["gross_exposure"].max() <= 0.91
     assert trace["cost"].sum() > 0
     assert allocations["target_weight"].max() <= 0.6
+
+
+def test_build_rebalance_orders_marks_out_of_universe_holdings(tmp_path):
+    project = tmp_path / "project"
+    config_dir = project / "configs"
+    reports_dir = project / "reports"
+    reference_dir = project / "data_krx" / "raw" / "reference"
+    config_dir.mkdir(parents=True)
+    reports_dir.mkdir()
+    reference_dir.mkdir(parents=True)
+    config_path = config_dir / "test.yaml"
+    config_path.write_text(
+        "project:\n"
+        "  data_dir: data_krx\n",
+        encoding="utf-8",
+    )
+    pd.DataFrame({"ticker": ["000001"], "abbrv": ["테스트"], "market": ["KOSPI"]}).to_parquet(
+        reference_dir / "kospi_issue_base.parquet",
+        index=False,
+    )
+    target_path = reports_dir / "current_targets_20260513_strong_trend_full_else070.csv"
+    pd.DataFrame(
+        {
+            "as_of_date": ["2026-05-13"],
+            "feature_date": ["2026-05-13"],
+            "ticker": ["000001"],
+            "rule": ["strong_trend_full_else070"],
+            "model_name": ["model"],
+            "assumed_position_ratio": [0.0],
+            "action": [5],
+            "raw_target_ratio": [1.0],
+            "cap": [1.0],
+            "cap_reason": ["strong_trend"],
+            "target_ratio": [1.0],
+            "market_return_60d": [0.1],
+            "market_return_120d": [0.1],
+            "market_ma60_gap": [0.1],
+            "market_ma120_gap": [0.1],
+            "relative_strength_20d": [0.1],
+            "return_20d": [0.2],
+            "return_60d": [0.3],
+            "drawdown_60d": [0.0],
+        }
+    ).to_csv(target_path, index=False)
+    positions_path = tmp_path / "positions.csv"
+    pd.DataFrame(
+        {
+            "ticker": ["000001", "NVDA"],
+            "name": ["테스트", "엔비디아"],
+            "market_value": [100000.0, 100000.0],
+        }
+    ).to_csv(positions_path, index=False)
+
+    result = build_rebalance_orders(str(config_path), str(positions_path), target_path=str(target_path), top_n=1)
+    orders = pd.read_csv(result["csv"], dtype={"ticker": str})
+
+    assert orders.loc[orders["ticker"] == "000001", "asset_scope"].iloc[0] == "model_universe"
+    assert orders.loc[orders["ticker"] == "NVDA", "asset_scope"].iloc[0] == "out_of_universe"
+    assert orders.loc[orders["ticker"] == "NVDA", "target_weight_pct"].iloc[0] == 0.0
 
 
 def test_add_event_features_supports_all_market_events():

@@ -215,7 +215,140 @@ reports/portfolio_allocator_test_report.md
 - E032 target basket은 Buy & Hold universe보다 좋지만, test에서는 MA20/60보다 약했다.
 - 다음 연구 후보는 E032와 MA20/60 중 어느 basket을 선택할지 정하는 portfolio-level selector다.
 
-## 7. 데이터 수집 구조
+## 7. 실제 보유 포지션 반영
+
+카카오페이증권 등에서 가져온 보유 내역은 CSV로 저장한다.
+
+현재 입력 파일:
+
+```text
+data_krx/raw/positions/current_positions.csv
+```
+
+필수 컬럼:
+
+```csv
+ticker,name,quantity,avg_price,current_price,market_value
+```
+
+최소로는 아래 두 컬럼만 있어도 된다.
+
+```csv
+ticker,market_value
+```
+
+현재 보유비중과 모델 allocator 목표비중을 비교하려면 아래 명령을 실행한다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.build_rebalance_orders \
+  --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml \
+  --positions data_krx/raw/positions/current_positions.csv \
+  --rule strong_trend_full_else070 \
+  --top-n 12 \
+  --gross-cap 0.90 \
+  --max-weight 0.20 \
+  --min-order-amount 5000 \
+  --cash 0
+```
+
+생성 파일:
+
+```text
+reports/rebalance_orders_YYYYMMDD_strong_trend_full_else070.csv
+reports/rebalance_orders_YYYYMMDD_strong_trend_full_else070.md
+```
+
+주의:
+
+- 현재 모델 universe는 KRX 48종목이다.
+- 삼성전자우, 국내 ETF, 미국 주식, 금 ETF 등 universe 밖 자산은 `out_of_universe`로 표시된다.
+- `out_of_universe` 자산은 모델 기준 target weight가 0이다. 이것은 자동 매도 지시가 아니라, 현재 모델이 평가하지 않는 자산이라는 뜻이다.
+- 실제 주문은 세금, 환전, 계좌 목적, 장기 보유 의도 등을 별도로 고려해야 한다.
+
+현재 카카오페이 입력 기준 요약:
+
+- 총 평가금액: 약 `2,518,650원`
+- 모델 universe 보유: 삼성전자 1종목
+- universe 밖 보유: 삼성전자우, 국내 ETF, 미국 주식, GLD 등
+- allocator 기준 상위 KRX 종목을 사려면 universe 밖 자산을 줄여야 한다는 형태로 보고서가 나온다.
+
+### 보유종목 자체 분석
+
+현재 보유종목을 모델 universe 여부와 별개로 분석하려면 아래 명령을 실행한다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.analyze_positions \
+  --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml \
+  --positions data_krx/raw/positions/current_positions.csv \
+  --rule strong_trend_full_else070 \
+  --krx-start 2025-01-01
+```
+
+생성 파일:
+
+```text
+reports/current_position_analysis_YYYYMMDD.csv
+reports/current_position_analysis_YYYYMMDD.md
+```
+
+이 분석은 아래를 포함한다.
+
+- 현재 보유비중
+- 평가손익률
+- 모델 universe 여부
+- 한국 주식의 KRX reference 정보
+- 한국 주식의 MA20/60 추세, 20일/60일 수익률, 60일 drawdown
+- 미국/글로벌 자산의 yfinance 기반 MA20/60 추세, 20일/60일/120일 수익률, 60일 drawdown, 20일 변동성
+- 모델 target이 있는 종목은 target ratio
+
+현재 보유 한국 주식 분석:
+
+| ticker | name | scope | pnl | trend | return_20d | drawdown_60d | model target |
+| --- | --- | --- | ---: | --- | ---: | ---: | ---: |
+| 005930 | 삼성전자 | model universe | 34.9% | uptrend | 41.3% | -0.5% | 100.0% |
+| 005935 | 삼성전자우 | KRX stock outside model | 6.1% | uptrend | 36.5% | -3.0% | 없음 |
+| 001510 | SK증권 | KRX stock outside model | -19.7% | uptrend | 140.2% | -20.7% | 없음 |
+
+현재 보유 미국/글로벌 자산 분석:
+
+| ticker | name | weight | pnl | trend | return_20d | drawdown_60d | volatility_20d |
+| --- | --- | ---: | ---: | --- | ---: | ---: | ---: |
+| AMD | AMD | 26.4% | 2.0% | uptrend | 62.1% | -1.7% | 98.2% |
+| GLD | SPDR Gold Shares | 25.5% | 2.8% | downtrend | -2.3% | -12.3% | 21.7% |
+| NVDA | 엔비디아 | 13.4% | 16.6% | uptrend | 19.0% | 0.0% | 40.6% |
+| COP | 코노코필립스 | 7.0% | -10.6% | downtrend | -1.8% | -10.8% | 37.0% |
+| IONQ | 아이온큐 | 3.3% | 2.3% | uptrend | 27.4% | 0.0% | 91.1% |
+| DVN | 데번 에너지 | 2.8% | -0.1% | uptrend | 2.4% | -10.0% | 43.5% |
+| QUBT | 퀀텀 컴퓨팅 | 0.7% | -18.4% | uptrend | 26.5% | 0.0% | 101.0% |
+
+미국/글로벌 자산은 E032 target을 받지 않는다. 현재는 trend/risk 분석만 한다.
+
+### 한 장짜리 의사결정표
+
+보유종목 분석과 리밸런싱 주문 후보를 합쳐 action label을 보려면 아래를 실행한다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.build_portfolio_decision_sheet \
+  --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml
+```
+
+생성 파일:
+
+```text
+reports/portfolio_decision_sheet_YYYYMMDD.csv
+reports/portfolio_decision_sheet_YYYYMMDD.md
+```
+
+현재 label 의미:
+
+- `trim_candidate`: 비중이 크거나 downtrend/손실/고변동성 때문에 축소 검토
+- `trim_to_allocator`: 모델 allocator 목표비중보다 현재 비중이 높음
+- `keep_watch`: 유지하되 관찰
+- `speculative_watch`: 고변동성 관찰
+- `manual_review`: ETF/unmapped 등 모델 밖이라 수동 검토
+- `watch_or_trim`: 추세는 살아 있지만 drawdown/손실이 커서 관찰 또는 축소 검토
+
+## 8. 데이터 수집 구조
 
 KRX OpenAPI는 일별 `basDd` 기준으로 데이터를 준다. 프로젝트는 API 호출을 줄이기 위해 아래를 적용한다.
 
@@ -242,7 +375,7 @@ data_krx/raw/collection_state.json
 }
 ```
 
-## 8. 수동 실행 명령
+## 9. 수동 실행 명령
 
 ### 가격만 증분 수집
 
@@ -285,7 +418,7 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.build_target_change_report \
   --rule strong_trend_full_else070
 ```
 
-## 9. 학습과 재학습
+## 10. 학습과 재학습
 
 현재 E032 모델은 이미 학습된 상태다.
 
@@ -309,7 +442,7 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.train_rl \
 - portfolio allocator 기준 재평가
 - test 성과뿐 아니라 valid/test 일관성 확인
 
-## 10. 테스트
+## 11. 테스트
 
 코드 변경 후에는 항상 아래를 실행한다.
 
@@ -324,7 +457,7 @@ PYTHONPATH=src .venv/bin/python -m pytest -q
 24 passed
 ```
 
-## 11. 문제 해결
+## 12. 문제 해결
 
 ### 장마감 후에도 최신일이 안 바뀐다
 
@@ -370,7 +503,11 @@ reports/trading_sheet_YYYYMMDD_strong_trend_full_else070.md
 
 현재 test 구간에서는 맞다. 강한 상승장에서는 MA20/60 basket이 E032보다 강했다. 하지만 valid에서는 E032가 좋았다. 따라서 다음 연구 과제는 “어느 regime에서 어느 basket을 쓸지”를 정하는 selector다.
 
-## 12. 다음 개발 후보
+### 미국 주식과 ETF가 전부 매도로 나온다
+
+현재 모델 universe가 KRX 48종목이기 때문이다. `out_of_universe`는 “모델이 목표비중을 계산하지 않는 자산”이라는 의미다. 미국 주식/ETF까지 함께 운용하려면 별도 universe와 데이터 파이프라인을 추가해야 한다.
+
+## 13. 다음 개발 후보
 
 우선순위는 아래 순서가 좋다.
 

@@ -52,7 +52,8 @@ def _load_reference(config_path: str) -> pd.DataFrame:
     reference = pd.concat(frames, ignore_index=True)
     reference["ticker"] = reference["ticker"].astype(str).map(normalize_ticker)
     if "abbrv" in reference.columns:
-        reference["name"] = reference["abbrv"].fillna(reference.get("name"))
+        fallback_name = reference["name"] if "name" in reference.columns else ""
+        reference["name"] = reference["abbrv"].fillna(fallback_name)
     return reference[["ticker", "name", "market"]].drop_duplicates("ticker")
 
 
