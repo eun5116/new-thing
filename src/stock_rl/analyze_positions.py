@@ -23,6 +23,9 @@ def _load_positions(path: str | Path) -> pd.DataFrame:
     positions["ticker"] = positions["ticker"].map(normalize_ticker)
     for column in ["quantity", "avg_price", "current_price", "market_value"]:
         positions[column] = pd.to_numeric(positions[column], errors="coerce").fillna(0.0)
+    calculated_market_value = positions["quantity"] * positions["current_price"]
+    positions["input_market_value"] = positions["market_value"]
+    positions["market_value"] = calculated_market_value.where(calculated_market_value > 0, positions["market_value"])
     return positions
 
 

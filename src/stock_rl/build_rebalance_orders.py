@@ -44,6 +44,12 @@ def _load_positions(path: str | Path) -> pd.DataFrame:
         raise ValueError(f"positions CSV missing columns: {sorted(missing)}")
     positions["ticker"] = positions["ticker"].map(normalize_ticker)
     positions["market_value"] = pd.to_numeric(positions["market_value"], errors="coerce").fillna(0.0)
+    if {"quantity", "current_price"}.issubset(positions.columns):
+        positions["quantity"] = pd.to_numeric(positions["quantity"], errors="coerce").fillna(0.0)
+        positions["current_price"] = pd.to_numeric(positions["current_price"], errors="coerce").fillna(0.0)
+        calculated_market_value = positions["quantity"] * positions["current_price"]
+        positions["input_market_value"] = positions["market_value"]
+        positions["market_value"] = calculated_market_value.where(calculated_market_value > 0, positions["market_value"])
     if "name" not in positions.columns:
         positions["name"] = ""
     return positions

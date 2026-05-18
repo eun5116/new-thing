@@ -6,6 +6,8 @@ from stock_rl.build_report_dashboard import build_report_dashboard
 from stock_rl.build_portfolio_decision_sheet import build_decision_sheet
 from stock_rl.build_trading_sheet import build_trading_sheet
 from stock_rl.build_rebalance_orders import build_rebalance_orders
+from stock_rl.build_rebalance_orders import _load_positions as load_rebalance_positions
+from stock_rl.analyze_positions import _load_positions as load_analysis_positions
 from stock_rl.build_target_change_report import build_target_change_report
 from stock_rl.backtest_portfolio_allocator import simulate_portfolio
 from stock_rl.collection_state import load_collection_state, mark_empty_response, recently_checked_empty, save_collection_state
@@ -50,6 +52,24 @@ def sample_multi_ticker_prices():
     second["low"] = second["adj_close"] - 1
     second["trading_value"] = second["volume"] * second["adj_close"]
     return pd.concat([first, second], ignore_index=True)
+
+
+def test_position_loaders_recalculate_market_value_from_quantity_and_current_price(tmp_path):
+    path = tmp_path / "positions.csv"
+    path.write_text(
+        "ticker,name,quantity,avg_price,current_price,market_value\n"
+        "005930,삼성전자,5,210500,281000,281000\n"
+        "AMD,AMD,0.084,612000,636060,636060\n",
+        encoding="utf-8",
+    )
+
+    analysis_positions = load_analysis_positions(path)
+    rebalance_positions = load_rebalance_positions(path)
+
+    assert analysis_positions.loc[analysis_positions["ticker"] == "005930", "market_value"].iloc[0] == 1_405_000
+    assert rebalance_positions.loc[rebalance_positions["ticker"] == "005930", "market_value"].iloc[0] == 1_405_000
+    assert round(float(analysis_positions.loc[analysis_positions["ticker"] == "AMD", "market_value"].iloc[0]), 2) == 53429.04
+    assert round(float(rebalance_positions.loc[rebalance_positions["ticker"] == "AMD", "market_value"].iloc[0]), 2) == 53429.04
 
 
 def test_add_price_features_uses_next_day_target():
