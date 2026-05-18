@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 
 from stock_rl.build_features import add_event_features, add_market_features, add_price_features, split_and_write
 from stock_rl.build_report_dashboard import build_report_dashboard
+from stock_rl.build_portfolio_policy_sheet import build_portfolio_policy_sheet, classify_asset
 from stock_rl.build_portfolio_decision_sheet import build_decision_sheet
 from stock_rl.build_trading_sheet import build_trading_sheet
 from stock_rl.build_rebalance_orders import build_rebalance_orders
@@ -513,6 +514,65 @@ def test_build_decision_sheet_writes_png_snapshot(tmp_path):
 
     assert result["png"].exists()
     assert result["png"].stat().st_size > 0
+
+
+def test_portfolio_policy_sheet_flags_group_and_name_caps(tmp_path):
+    project = tmp_path / "project"
+    config_dir = project / "configs"
+    reports_dir = project / "reports"
+    config_dir.mkdir(parents=True)
+    reports_dir.mkdir(parents=True)
+    config_path = config_dir / "test.yaml"
+    config_path.write_text(
+        "project:\n"
+        "  data_dir: data_krx\n",
+        encoding="utf-8",
+    )
+    policy_path = config_dir / "portfolio_policy.yaml"
+    policy_path.write_text(
+        "groups:\n"
+        "  us_speculative:\n"
+        "    label: US speculative\n"
+        "    max_total_weight_pct: 8.0\n"
+        "    max_name_weight_pct: 3.0\n"
+        "    action: high_vol_cap\n"
+        "  us_large_cap:\n"
+        "    label: US large cap\n"
+        "    max_total_weight_pct: 25.0\n"
+        "    max_name_weight_pct: 10.0\n"
+        "    action: trend_risk\n"
+        "  manual_review:\n"
+        "    label: Manual review\n"
+        "    max_total_weight_pct: 5.0\n"
+        "    max_name_weight_pct: 3.0\n"
+        "    action: manual_review\n"
+        "ticker_groups:\n"
+        "  QUBT: us_speculative\n"
+        "  NVDA: us_large_cap\n",
+        encoding="utf-8",
+    )
+    pd.DataFrame(
+        {
+            "ticker": ["QUBT", "IONQ", "NVDA"],
+            "name": ["퀀텀 컴퓨팅", "아이온큐", "엔비디아"],
+            "asset_scope": ["us_or_global", "us_or_global", "us_or_global"],
+            "current_weight_pct": [6.0, 4.0, 9.0],
+            "pnl_pct": [-10.0, -5.0, 12.0],
+            "trend_status": ["uptrend", "uptrend", "uptrend"],
+            "return_20d_pct": [5.0, 4.0, 10.0],
+            "drawdown_60d_pct": [-10.0, -9.0, -4.0],
+            "volatility_20d_pct": [100.0, 95.0, 40.0],
+        }
+    ).to_csv(reports_dir / "current_position_analysis_20260518.csv", index=False)
+
+    result = build_portfolio_policy_sheet(str(config_path), policy_path=str(policy_path))
+    sheet = pd.read_csv(result["csv"], dtype={"ticker": str})
+
+    assert result["markdown"].exists()
+    assert classify_asset(sheet.loc[sheet["ticker"] == "QUBT"].iloc[0], {"ticker_groups": {"QUBT": "us_speculative"}}) == "us_speculative"
+    assert sheet.loc[sheet["ticker"] == "QUBT", "policy_decision"].iloc[0] == "trim_to_name_cap"
+    assert sheet.loc[sheet["ticker"] == "IONQ", "policy_group"].iloc[0] == "us_speculative"
+    assert sheet.loc[sheet["ticker"] == "IONQ", "group_excess_pct"].iloc[0] == 2.0
 
 
 def test_build_report_dashboard_writes_png_snapshot(tmp_path):

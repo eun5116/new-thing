@@ -350,6 +350,25 @@ reports/portfolio_decision_sheet_YYYYMMDD.md
 - `manual_review`: ETF/unmapped 등 모델 밖이라 수동 검토
 - `watch_or_trim`: 추세는 살아 있지만 drawdown/손실이 커서 관찰 또는 축소 검토
 
+### 포트폴리오 정책 시트
+
+KRX 48종목 모델 밖의 미국 주식, ETF, 우선주, 테마 종목은 별도 정책으로 비중을 점검한다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.build_portfolio_policy_sheet \
+  --config configs/KRX_E032_liquid48_long_trend_min_exposure.yaml \
+  --policy configs/portfolio_policy.yaml
+```
+
+생성 파일:
+
+```text
+reports/portfolio_policy_sheet_YYYYMMDD.csv
+reports/portfolio_policy_sheet_YYYYMMDD.md
+```
+
+이 시트는 자동 주문표가 아니라 자산군별 총 비중과 종목별 최대 비중을 확인하는 risk overlay다. E032 target은 KRX 모델 종목에만 적용하고, 미국 주식/ETF/모델 밖 KRX 종목은 `configs/portfolio_policy.yaml`의 그룹 한도로 관리한다.
+
 ## 8. 데이터 수집 구조
 
 KRX OpenAPI는 일별 `basDd` 기준으로 데이터를 준다. 프로젝트는 API 호출을 줄이기 위해 아래를 적용한다.
