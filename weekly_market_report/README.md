@@ -11,10 +11,12 @@ Weekly email report:
 
 ## Setup (WSL)
 1) Create venv:
-   python3 -m venv /home/jack/trail\ and\ error/.venv
-   source /home/jack/trail\ and\ error/.venv/bin/activate
+   cd /home/jack/project_splits_20260512/weekly_market_report_repo
+   python3 -m venv .venv
+   source .venv/bin/activate
 
 2) Install deps:
+   cd weekly_market_report
    pip install -r requirements.txt
 
 3) Configure env:
@@ -38,13 +40,14 @@ Example: every Monday 08:00 (Asia/Seoul)
 
 2) Add:
    CRON_TZ=Asia/Seoul
-   0 8 * * 1 /home/jack/trail\ and\ error/weekly_market_report/run_weekly.sh
+   0 8 * * 1 /home/jack/project_splits_20260512/weekly_market_report_repo/weekly_market_report/run_weekly.sh
 
 ## Notes
 - KOSPI uses pykrx market data.
+- KRX live fetch가 실패해도 KOSPI 알림은 캐시된 종목이나 기본 KOSPI 20종목으로 fallback한다.
 - S&P 500 uses Wikipedia tickers + yfinance for market cap and prices.
 - Cron does not run missed jobs while your PC is off.
-- `run_weekly.sh` prefers `/home/jack/trail and error/.venv/bin/python` and falls back to `~/venvs/weekly_market_report/bin/python`.
+- `run_weekly.sh` prefers `/home/jack/project_splits_20260512/weekly_market_report_repo/.venv/bin/python` and falls back to `~/venvs/weekly_market_report/bin/python`.
 - Every run saves local report artifacts under `weekly_market_report/outputs/`, including a PDF copy.
 - Successful email sends attach the generated PDF report.
 - Every run appends market history under `weekly_market_report/history/`.

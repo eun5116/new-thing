@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="/home/jack/trail and error/weekly_market_report"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$PROJECT_DIR/.." && pwd)"
 LOG_FILE="$PROJECT_DIR/weekly.log"
-PRIMARY_PYTHON_BIN="/home/jack/trail and error/.venv/bin/python"
+PRIMARY_PYTHON_BIN="$REPO_DIR/.venv/bin/python"
 LEGACY_PYTHON_BIN="/home/jack/venvs/weekly_market_report/bin/python"
 
 mkdir -p "$PROJECT_DIR"

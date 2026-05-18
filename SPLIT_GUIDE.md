@@ -33,3 +33,7 @@ git add .
 git status
 git commit -m "Initial weekly market report import"
 ```
+
+## GitHub에 올리기
+
+commit, push, 직전 commit에 합치기, force-with-lease 사용법은 `GITHUB_WORKFLOW.md`를 참고한다.

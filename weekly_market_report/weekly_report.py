@@ -4,6 +4,7 @@ import os
 import sys
 import smtplib
 import datetime as dt
+import contextlib
 import time
 import re
 from email.mime.multipart import MIMEMultipart
@@ -14,8 +15,6 @@ import pandas as pd
 import requests
 from dotenv import load_dotenv
 import yfinance as yf
-from pykrx import stock
-from pykrx.website.krx.market import wrap as krx_wrap
 from pathlib import Path
 import json
 
@@ -56,6 +55,7 @@ ALERT_COLUMNS = [
     "total_return",
     "up_days",
     "max_consecutive_down_days",
+    "signal",
     "triggered",
 ]
 DEFAULT_KOSPI20 = [
@@ -81,6 +81,8 @@ DEFAULT_KOSPI20 = [
     ("SK텔레콤", "017670"),
 ]
 OFFLINE_MODE = False
+_PYKRX_STOCK = None
+_PYKRX_KRX_WRAP = None
 
 
 def _finalize_report_df(df):
@@ -105,6 +107,40 @@ def _to_text_table(df, empty_message):
     if df is None or df.empty:
         return empty_message
     return df.to_string(index=False)
+
+
+def _build_momentum_candidate_rows(alerts_df, limit=5):
+    if alerts_df is None or alerts_df.empty or "triggered" not in alerts_df.columns:
+        return pd.DataFrame(columns=ALERT_COLUMNS)
+    candidates = alerts_df[~alerts_df["triggered"]].copy()
+    if candidates.empty or "total_return" not in candidates.columns:
+        return pd.DataFrame(columns=ALERT_COLUMNS)
+    candidates["total_return"] = pd.to_numeric(candidates["total_return"], errors="coerce")
+    candidates = candidates.dropna(subset=["total_return"])
+    if candidates.empty:
+        return pd.DataFrame(columns=ALERT_COLUMNS)
+    return candidates.sort_values("total_return", ascending=False).head(limit).reset_index(drop=True)
+
+
+def _build_momentum_notice(config_path, candidates_df):
+    try:
+        cfg = load_alert_config(config_path)
+    except Exception:
+        cfg = {}
+    if candidates_df is None or candidates_df.empty:
+        return "No symbols met the two-week alert criteria."
+
+    min_return = float(cfg.get("min_total_return", 0.10)) * 100
+    min_up_days = int(cfg.get("min_up_days", 8))
+    max_down_days = int(cfg.get("max_consecutive_down_days", 2))
+    overheat_return = float(cfg.get("overheat_total_return", 0.15)) * 100
+    overheat_up_days = int(cfg.get("overheat_min_up_days", 4))
+    return (
+        "No symbols met all two-week alert criteria. "
+        f"Closest candidates are shown below; trigger requires either return >= {min_return:.1f}%, "
+        f"up days >= {min_up_days}, and max consecutive down days <= {max_down_days}, "
+        f"or short-term overheat return >= {overheat_return:.1f}% with up days >= {overheat_up_days}."
+    )
 
 
 def _safe_config_name(config_path):
@@ -219,6 +255,10 @@ def load_alert_config(path):
     cfg.setdefault("trend_policy", "tolerant")
     cfg.setdefault("min_up_days", 8)
     cfg.setdefault("max_consecutive_down_days", 2)
+    cfg.setdefault("overheat_enabled", False)
+    cfg.setdefault("overheat_total_return", 0.15)
+    cfg.setdefault("overheat_min_up_days", 4)
+    cfg.setdefault("overheat_signal_name", "short_term_overheat")
     cfg.setdefault("price_basis", "adjusted_close")
     cfg.setdefault("interval", "1d")
     cfg.setdefault("universe", [])
@@ -258,6 +298,23 @@ def _retry_pykrx(callable_fn, tries=3, delay=1.0):
             if attempt < tries - 1:
                 time.sleep(delay)
     return None, last_error
+
+
+def _get_pykrx_modules():
+    global _PYKRX_STOCK, _PYKRX_KRX_WRAP
+
+    if _PYKRX_STOCK is not None and _PYKRX_KRX_WRAP is not None:
+        return _PYKRX_STOCK, _PYKRX_KRX_WRAP
+
+    import importlib
+
+    sink = StringIO()
+    with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+        pykrx_pkg = importlib.import_module("pykrx")
+        _PYKRX_STOCK = pykrx_pkg.stock
+        _PYKRX_KRX_WRAP = importlib.import_module("pykrx.website.krx.market").wrap
+
+    return _PYKRX_STOCK, _PYKRX_KRX_WRAP
 
 
 def _slugify_filename(value):
@@ -442,6 +499,7 @@ def save_market_history(report_date, kospi_df, sp_df, alert_results, history_dir
         "total_return",
         "up_days",
         "max_consecutive_down_days",
+        "signal",
         "triggered",
     ]
 
@@ -501,6 +559,7 @@ def save_market_history(report_date, kospi_df, sp_df, alert_results, history_dir
                     "total_return": row.get("total_return", ""),
                     "up_days": row.get("up_days", ""),
                     "max_consecutive_down_days": row.get("max_consecutive_down_days", ""),
+                    "signal": row.get("signal", ""),
                     "triggered": row.get("triggered", ""),
                 }
             )
@@ -519,12 +578,13 @@ def save_market_history(report_date, kospi_df, sp_df, alert_results, history_dir
 def _find_latest_kospi_caps(max_lookback_days=14):
     if _is_offline_mode():
         return None, None, RuntimeError("Offline mode enabled; skipping live KOSPI market cap fetch.")
+    _get_pykrx_modules()
     today = dt.datetime.now().date()
     last_error = None
     for offset in range(max_lookback_days + 1):
         target = (today - dt.timedelta(days=offset)).strftime("%Y%m%d")
         # Use low-level wrapper to avoid pykrx stock_api holiday-column bug.
-        caps, err = _retry_pykrx(lambda: krx_wrap.get_market_cap_by_ticker(target, market="KOSPI"))
+        caps, err = _retry_pykrx(lambda: _get_market_cap_by_ticker_silently(target))
         if err:
             last_error = err
             continue
@@ -572,6 +632,13 @@ def _get_cached_kospi_symbols():
     if cached_df.empty or "Ticker" not in cached_df.columns:
         return []
     return [str(symbol).strip() for symbol in cached_df["Ticker"].dropna().tolist() if str(symbol).strip()]
+
+
+def _get_market_cap_by_ticker_silently(target):
+    _, krx_wrap = _get_pykrx_modules()
+    sink = StringIO()
+    with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+        return krx_wrap.get_market_cap_by_ticker(target, market="KOSPI")
 
 def _get_df_latest_end_date(df, default=""):
     if df is None or df.empty or "EndDate" not in df.columns:
@@ -675,10 +742,25 @@ def _resolve_alert_universe(config):
         return symbols, {}
     if market_scope == "kospi":
         if _is_offline_mode():
-            return _get_cached_kospi_symbols(), {}
-        end_date, _ = _get_latest_kospi_date()
-        symbols = stock.get_market_ticker_list(date=end_date, market="KOSPI")
-        return [str(symbol).strip() for symbol in symbols if str(symbol).strip()], {}
+            cached_symbols = _get_cached_kospi_symbols()
+            if cached_symbols:
+                return cached_symbols, {symbol: symbol for symbol in cached_symbols}
+            return [code for _, code in DEFAULT_KOSPI20], {code: name for name, code in DEFAULT_KOSPI20}
+        try:
+            stock, _ = _get_pykrx_modules()
+            end_date, _ = _get_latest_kospi_date()
+            sink = StringIO()
+            with contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
+                symbols = stock.get_market_ticker_list(date=end_date, market="KOSPI")
+            cleaned_symbols = [str(symbol).strip() for symbol in symbols if str(symbol).strip()]
+            if cleaned_symbols:
+                return cleaned_symbols, {symbol: symbol for symbol in cleaned_symbols}
+        except Exception:
+            pass
+        cached_symbols = _get_cached_kospi_symbols()
+        if cached_symbols:
+            return cached_symbols, {symbol: symbol for symbol in cached_symbols}
+        return [code for _, code in DEFAULT_KOSPI20], {code: name for name, code in DEFAULT_KOSPI20}
     return [], {}
 
 
@@ -711,20 +793,6 @@ def _download_yfinance_close_map(symbols, interval, auto_adjust, suffix="", chun
     return close_map
 
 
-def _lookup_kospi_names(symbols):
-    names = {}
-    for symbol in symbols:
-        try:
-            name, name_err = _retry_pykrx(lambda symbol=symbol: stock.get_market_ticker_name(symbol))
-            if name_err or not name:
-                names[symbol] = symbol
-            else:
-                names[symbol] = name
-        except Exception:
-            names[symbol] = symbol
-    return names
-
-
 def evaluate_two_week_momentum(series, config):
     clean = pd.Series(series).dropna().astype(float)
     window_trading_days = int(config["window_trading_days"])
@@ -739,6 +807,7 @@ def evaluate_two_week_momentum(series, config):
         "total_return": None,
         "up_days": 0,
         "max_consecutive_down_days": 0,
+        "signal": "",
         "triggered": False,
     }
     if len(clean) < window_trading_days:
@@ -768,13 +837,28 @@ def evaluate_two_week_momentum(series, config):
         except Exception:
             as_of_date = str(window.index[-1])
 
+    momentum_ok = bool(total_return >= float(config["min_total_return"]) and trend_ok)
+    overheat_ok = bool(
+        config.get("overheat_enabled", False)
+        and
+        total_return >= float(config.get("overheat_total_return", 0.15))
+        and up_days >= int(config.get("overheat_min_up_days", 4))
+    )
+    if momentum_ok:
+        signal = "two_week_momentum"
+    elif overheat_ok:
+        signal = str(config.get("overheat_signal_name", "short_term_overheat"))
+    else:
+        signal = ""
+
     result.update(
         {
             "as_of_date": as_of_date,
             "total_return": total_return,
             "up_days": up_days,
             "max_consecutive_down_days": max_consecutive_down_days,
-            "triggered": bool(total_return >= float(config["min_total_return"]) and trend_ok),
+            "signal": signal,
+            "triggered": bool(momentum_ok or overheat_ok),
         }
     )
     return result
@@ -797,7 +881,6 @@ def get_two_week_momentum_alerts(config_path):
     auto_adjust = str(cfg["price_basis"]).lower() == "adjusted_close"
     if market_scope == "kospi":
         close_map = _download_yfinance_close_map(symbols, str(cfg["interval"]), auto_adjust, suffix=".KS", chunk_size=50)
-        metadata = {symbol: symbol for symbol in symbols} if _is_offline_mode() else _lookup_kospi_names(symbols)
     else:
         close_map = _download_yfinance_close_map(symbols, str(cfg["interval"]), auto_adjust, chunk_size=100)
 
@@ -1067,6 +1150,7 @@ def get_kospi_top10_and_change(window=5):
     lookup_start = (dt.datetime.now() - dt.timedelta(days=45)).strftime("%Y%m%d")
     caps = caps.sort_values("시가총액", ascending=False).head(20)
     tickers = caps.index.tolist()
+    stock, _ = _get_pykrx_modules()
     rows = []
     for t in tickers:
         try:
@@ -1158,22 +1242,26 @@ def render_report(kospi_df, kospi_status, sp_df, alert_results, alert_statuses, 
         section_status = status_map.get(config_path.name, "")
         section_notice_html = ""
         section_notice_text = ""
+        candidate_alerts_df = pd.DataFrame(columns=ALERT_COLUMNS)
         if section_status:
             section_notice_html = f"<p><strong>Momentum notice:</strong> {section_status}</p>"
             section_notice_text = f"[Momentum] {section_status}\n"
         elif triggered_alerts_df.empty:
-            section_notice_html = "<p><strong>Momentum notice:</strong> No symbols met the two-week alert criteria.</p>"
-            section_notice_text = "[Momentum] No symbols met the two-week alert criteria.\n"
-        section_html = _to_html_table(triggered_alerts_df, "No triggered alerts.")
+            candidate_alerts_df = _build_momentum_candidate_rows(alerts_df)
+            section_notice = _build_momentum_notice(config_path, candidate_alerts_df)
+            section_notice_html = f"<p><strong>Momentum notice:</strong> {section_notice}</p>"
+            section_notice_text = f"[Momentum] {section_notice}\n"
+        display_alerts_df = triggered_alerts_df if not triggered_alerts_df.empty else candidate_alerts_df
+        section_html = _to_html_table(display_alerts_df, "No triggered alerts.")
         alert_sections_html.append(
             f"<h3>{section_title} Two-Week Momentum Alerts</h3>\n{section_notice_html}\n{section_html}"
         )
         section_text = f"\n\n{section_title} Two-Week Momentum Alerts:\n"
         section_text += section_notice_text
-        if triggered_alerts_df.empty:
+        if display_alerts_df.empty:
             section_text += "No triggered alerts."
         else:
-            section_text += _to_text_table(triggered_alerts_df, "No triggered alerts.")
+            section_text += _to_text_table(display_alerts_df, "No triggered alerts.")
         alert_sections_text.append(section_text)
     kospi_html = _to_html_table(kospi_df, "No KOSPI rows available.")
     sp_html = _to_html_table(sp_df, "No S&P 500 rows available.")

@@ -11,5 +11,9 @@ min_total_return: 0.10
 trend_policy: tolerant
 min_up_days: 8
 max_consecutive_down_days: 2
+overheat_enabled: true
+overheat_total_return: 0.15
+overheat_min_up_days: 4
+overheat_signal_name: short_term_overheat
 shuffle: false
 seed: 42
