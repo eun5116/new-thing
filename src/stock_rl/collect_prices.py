@@ -8,6 +8,7 @@ import yfinance as yf
 
 from stock_rl.config import load_config, project_path
 from stock_rl.krx_openapi import KrxOpenApiClient, fetch_stock_prices
+from stock_rl.trading_env import normalize_ticker
 
 
 PRICE_COLUMNS = {
@@ -148,7 +149,7 @@ def _write_prices(prices: pd.DataFrame, out_path: Path) -> None:
     else:
         merged = pd.concat([existing, prices], ignore_index=True)
     merged["date"] = pd.to_datetime(merged["date"]).dt.date
-    merged["ticker"] = merged["ticker"].astype(str).str.zfill(6)
+    merged["ticker"] = merged["ticker"].astype(str).map(normalize_ticker)
     merged = merged.drop_duplicates(["ticker", "date"], keep="last").sort_values(["ticker", "date"])
     if out_path.suffix == ".parquet":
         merged.to_parquet(out_path, index=False)

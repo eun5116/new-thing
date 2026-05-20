@@ -72,6 +72,11 @@ MARKET_FEATURE_DEFAULTS = {
 }
 
 
+def _normalize_ticker(ticker: str) -> str:
+    value = str(ticker)
+    return value.zfill(6) if value.isdigit() else value
+
+
 def clean_numeric_features(features: pd.DataFrame) -> pd.DataFrame:
     """Remove non-finite values from model-facing numeric columns."""
     clean = features.copy()
@@ -84,10 +89,10 @@ def read_price_files(price_dir: Path, tickers: list[str] | None = None) -> pd.Da
     files = sorted(price_dir.glob("*.parquet")) or sorted(price_dir.glob("*.csv"))
     if not files:
         raise FileNotFoundError(f"no price files found in {price_dir}")
-    wanted = {str(ticker).replace(".KS", "").replace(".KQ", "").zfill(6) for ticker in tickers or []}
+    wanted = {_normalize_ticker(str(ticker).replace(".KS", "").replace(".KQ", "")) for ticker in tickers or []}
     frames = []
     for path in files:
-        if wanted and path.stem.zfill(6) not in wanted:
+        if wanted and _normalize_ticker(path.stem) not in wanted:
             continue
         if path.suffix == ".parquet":
             frames.append(pd.read_parquet(path))
@@ -100,7 +105,7 @@ def read_price_files(price_dir: Path, tickers: list[str] | None = None) -> pd.Da
     missing = required.difference(prices.columns)
     if missing:
         raise ValueError(f"price data missing columns: {sorted(missing)}")
-    prices["ticker"] = prices["ticker"].astype(str).str.zfill(6)
+    prices["ticker"] = prices["ticker"].astype(str).map(_normalize_ticker)
     return prices.sort_values(["ticker", "date"]).reset_index(drop=True)
 
 

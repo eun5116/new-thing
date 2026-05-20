@@ -8,6 +8,7 @@ import pandas as pd
 from stock_rl.backtest_portfolio_allocator import _cap_and_normalize
 from stock_rl.build_trading_sheet import _load_reference, _markdown_table
 from stock_rl.config import project_path
+from stock_rl.positions import load_positions
 from stock_rl.report_png import render_rebalance_orders_png
 from stock_rl.trading_env import normalize_ticker
 
@@ -79,7 +80,7 @@ def build_rebalance_orders(
     out_dir: str | None = None,
 ) -> dict[str, Path]:
     resolved_target_path = Path(target_path) if target_path else _latest_target_path(config_path, rule)
-    positions = _load_positions(positions_path)
+    positions = load_positions(positions_path, config_path)
     targets = pd.read_csv(resolved_target_path, dtype={"ticker": str})
     targets["ticker"] = targets["ticker"].map(normalize_ticker)
     target_weights = _target_weights_from_current_targets(targets, top_n, gross_cap, max_weight)

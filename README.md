@@ -105,6 +105,16 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.backtest_portfolio_allocator \
 data_krx/raw/positions/current_positions.csv
 ```
 
+최소 입력은 보유 종목과 수량만 있으면 됩니다.
+
+```csv
+ticker,quantity
+005930,5
+NVDA,2.415
+```
+
+`name`, `current_price`, `market_value`는 가능한 경우 로컬 가격 데이터의 최신 종가와 KRX reference에서 자동 보강됩니다. KRX ETF/ETN은 보유 분석 실행 시 KRX 증권상품 일별매매정보로 가격을 수집합니다. `avg_price`가 없으면 손익률은 0으로 계산됩니다.
+
 리밸런싱 주문 후보표는 아래 명령으로 생성합니다.
 
 ```bash

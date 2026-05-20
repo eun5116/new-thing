@@ -8,6 +8,14 @@ from stock_rl.config import load_config, project_path
 from stock_rl.trading_env import MultiTickerTradingEnv, StockTradingEnv, TradingEnvConfig, normalize_ticker
 
 
+def _feature_columns_for_config(config: dict) -> list[str] | None:
+    if config["training"].get("feature_scope") != "us_portfolio":
+        return None
+    from stock_rl.build_us_portfolio_features import US_FEATURE_COLUMNS
+
+    return US_FEATURE_COLUMNS
+
+
 def _load_algorithms():
     try:
         from stable_baselines3 import A2C, DQN, PPO
@@ -25,6 +33,7 @@ def train(config_path: str, ticker: str | None = None) -> str:
     train_path = project_path(config_path, data_dir, "processed", "train.parquet")
     train_features = pd.read_parquet(train_path)
     env_config = TradingEnvConfig(**config["trading"])
+    feature_columns = _feature_columns_for_config(config)
     train_scope = config["training"].get("train_scope", "single_ticker")
     if train_scope == "multi_ticker" and ticker is None:
         tickers = [normalize_ticker(ticker) for ticker in config["market"]["tickers"]]
@@ -32,7 +41,7 @@ def train(config_path: str, ticker: str | None = None) -> str:
         missing = sorted(set(tickers).difference(available))
         if missing:
             raise ValueError(f"tickers not found in training features: {missing}")
-        env = MultiTickerTradingEnv(train_features, tickers=tickers, config=env_config)
+        env = MultiTickerTradingEnv(train_features, tickers=tickers, feature_columns=feature_columns, config=env_config)
         model_ticker = "multi"
     else:
         ticker = ticker or config["market"]["tickers"][0]
@@ -40,7 +49,7 @@ def train(config_path: str, ticker: str | None = None) -> str:
         available = set(train_features["ticker"].astype(str).map(normalize_ticker))
         if ticker not in available:
             raise ValueError(f"ticker not found in training features: {ticker}")
-        env = StockTradingEnv(train_features, ticker=ticker, config=env_config)
+        env = StockTradingEnv(train_features, ticker=ticker, feature_columns=feature_columns, config=env_config)
         model_ticker = ticker
 
     algo_name = config["training"].get("algorithm", "PPO")

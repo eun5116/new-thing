@@ -10,6 +10,7 @@ from stock_rl.build_trading_sheet import _load_reference, _markdown_table
 from stock_rl.config import project_path
 from stock_rl.collect_prices import fetch_yfinance
 from stock_rl.krx_openapi import KrxOpenApiClient, fetch_stock_prices
+from stock_rl.positions import load_positions
 from stock_rl.report_png import render_position_analysis_png
 from stock_rl.trading_env import normalize_ticker
 
@@ -58,8 +59,6 @@ def collect_held_krx_stock_prices(
     reference = _krx_reference_map(config_path)
     numeric_tickers = {ticker for ticker in positions["ticker"] if str(ticker).isdigit()}
     stock_reference = reference[reference["ticker"].isin(numeric_tickers)]
-    if stock_reference.empty:
-        return []
 
     client = KrxOpenApiClient.from_env()
     data_dir = "data_krx"
@@ -68,22 +67,79 @@ def collect_held_krx_stock_prices(
     state_path = project_path(config_path, data_dir, "raw", "collection_state.json")
     out_dir.mkdir(parents=True, exist_ok=True)
     written = []
-    for market, group in stock_reference.groupby("market"):
-        tickers = sorted(group["ticker"].unique())
-        prices = fetch_stock_prices(
-            client,
-            market,
-            tickers,
-            start,
-            end,
-            cache_dir=cache_dir,
-            state_path=state_path,
-            empty_cache_ttl_minutes=60,
-        )
+    if not stock_reference.empty:
+        for market, group in stock_reference.groupby("market"):
+            tickers = sorted(group["ticker"].unique())
+            prices = fetch_stock_prices(
+                client,
+                market,
+                tickers,
+                start,
+                end,
+                cache_dir=cache_dir,
+                state_path=state_path,
+                empty_cache_ttl_minutes=60,
+            )
+            for ticker, ticker_frame in prices.groupby("ticker"):
+                path = out_dir / f"{ticker}.parquet"
+                ticker_frame.to_parquet(path, index=False)
+                written.append(path)
+
+    unmapped_numeric_tickers = sorted(numeric_tickers.difference(set(stock_reference["ticker"])))
+    for market in ["ETF", "ETN"]:
+        if not unmapped_numeric_tickers:
+            break
+        try:
+            prices = fetch_stock_prices(
+                client,
+                market,
+                unmapped_numeric_tickers,
+                start,
+                end,
+                cache_dir=cache_dir,
+                state_path=state_path,
+                empty_cache_ttl_minutes=60,
+            )
+        except Exception as exc:
+            print(f"KRX {market}: skipped unmapped numeric tickers ({exc})", flush=True)
+            continue
+        found = set()
         for ticker, ticker_frame in prices.groupby("ticker"):
             path = out_dir / f"{ticker}.parquet"
             ticker_frame.to_parquet(path, index=False)
             written.append(path)
+            found.add(str(ticker))
+        unmapped_numeric_tickers = [ticker for ticker in unmapped_numeric_tickers if ticker not in found]
+    written.extend(collect_held_krx_product_prices_yfinance(config_path, unmapped_numeric_tickers, start, end))
+    return written
+
+
+def collect_held_krx_product_prices_yfinance(
+    config_path: str,
+    tickers: list[str],
+    start: str = "2025-01-01",
+    end: str | None = None,
+) -> list[Path]:
+    if not tickers:
+        return []
+    out_dir = project_path(config_path, "data_krx", "raw", "position_prices")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written = []
+    for ticker in sorted(tickers):
+        prices = pd.DataFrame()
+        for suffix in [".KS", ".KQ"]:
+            try:
+                prices = fetch_yfinance(f"{ticker}{suffix}", start, end)
+            except Exception:
+                continue
+            if not prices.empty:
+                break
+        if prices.empty:
+            continue
+        prices["ticker"] = ticker
+        path = out_dir / f"{ticker}.parquet"
+        prices.to_parquet(path, index=False)
+        written.append(path)
     return written
 
 
@@ -153,11 +209,12 @@ def analyze_positions(
     us_start: str = "2025-01-01",
     out_dir: str | None = None,
 ) -> dict[str, Path]:
-    positions = _load_positions(positions_path)
+    positions = load_positions(positions_path, config_path)
     if collect_krx:
         collect_held_krx_stock_prices(config_path, positions, start=krx_start)
     if collect_us:
         collect_held_us_prices(config_path, positions, start=us_start)
+    positions = load_positions(positions_path, config_path)
     targets = _load_targets(config_path, rule)
     reference = _krx_reference_map(config_path)
     krx_features = _load_position_price_features(config_path)

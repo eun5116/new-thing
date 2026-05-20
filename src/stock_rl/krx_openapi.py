@@ -20,6 +20,8 @@ from stock_rl.collection_state import (
 
 KOSPI_STOCK_DAILY_URL = "http://data-dbg.krx.co.kr/svc/apis/sto/stk_bydd_trd"
 KOSDAQ_STOCK_DAILY_URL = "http://data-dbg.krx.co.kr/svc/apis/sto/ksq_bydd_trd"
+ETF_DAILY_URL = "http://data-dbg.krx.co.kr/svc/apis/etp/etf_bydd_trd"
+ETN_DAILY_URL = "http://data-dbg.krx.co.kr/svc/apis/etp/etn_bydd_trd"
 KOSPI_INDEX_DAILY_URL = "http://data-dbg.krx.co.kr/svc/apis/idx/kospi_dd_trd"
 KOSDAQ_INDEX_DAILY_URL = "http://data-dbg.krx.co.kr/svc/apis/idx/kosdaq_dd_trd"
 KOSPI_ISSUE_BASE_URL = "http://data-dbg.krx.co.kr/svc/apis/sto/stk_isu_base_info"
@@ -28,6 +30,8 @@ KOSDAQ_ISSUE_BASE_URL = "http://data-dbg.krx.co.kr/svc/apis/sto/ksq_isu_base_inf
 STOCK_DAILY_URLS = {
     "KOSPI": KOSPI_STOCK_DAILY_URL,
     "KOSDAQ": KOSDAQ_STOCK_DAILY_URL,
+    "ETF": ETF_DAILY_URL,
+    "ETN": ETN_DAILY_URL,
 }
 
 INDEX_DAILY_URLS = {
@@ -98,7 +102,7 @@ class KrxOpenApiClient:
 
 def _normalize_market(market: str) -> str:
     market_key = str(market).strip().upper()
-    if market_key not in {"KOSPI", "KOSDAQ"}:
+    if market_key not in {"KOSPI", "KOSDAQ", "ETF", "ETN"}:
         raise ValueError(f"Unsupported KRX market: {market}")
     return market_key
 

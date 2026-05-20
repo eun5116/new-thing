@@ -1,0 +1,59 @@
+{
+  "project": {
+    "data_dir": "data_us"
+  },
+  "market": {
+    "tickers": [
+      "DVN",
+      "NVDA",
+      "GLD",
+      "PG",
+      "IONQ",
+      "QUBT",
+      "COP",
+      "AMD"
+    ],
+    "benchmark_tickers": [
+      "SPY",
+      "QQQ"
+    ],
+    "primary_benchmark": "SPY",
+    "start": "2020-01-01",
+    "end": null,
+    "price_source": "yfinance"
+  },
+  "features": {
+    "adjusted_price_column": "adj_close",
+    "train_end": "2023-12-31",
+    "valid_end": "2024-12-31",
+    "event_lag_days": 1
+  },
+  "trading": {
+    "initial_cash": 1000000.0,
+    "transaction_cost_pct": 0.001,
+    "volatility_penalty": 0.05,
+    "max_position_ratio": 1.0,
+    "min_target_position_ratio": 0.25,
+    "action_mode": "target_position",
+    "reward_mode": "ma20_60_drawdown_hybrid",
+    "target_position_bins": 6,
+    "overlay_step_size": 0.25,
+    "drawdown_penalty": 0.08,
+    "turnover_penalty": 0.0005,
+    "drawdown_soft_limit": 0.15,
+    "drawdown_hard_limit": 0.2,
+    "drawdown_soft_penalty": 0.5,
+    "drawdown_hard_penalty": 2.0,
+    "hard_drawdown_terminate": false,
+    "ma_underperformance_penalty": 0.50,
+    "ma_outperformance_bonus": 0.50
+  },
+  "training": {
+    "algorithm": "PPO",
+    "total_timesteps": 75000,
+    "seed": 42,
+    "train_scope": "multi_ticker",
+    "feature_scope": "us_portfolio",
+    "model_name": "ppo_US_PORTFOLIO_HELD"
+  }
+}

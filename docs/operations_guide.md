@@ -225,16 +225,24 @@ reports/portfolio_allocator_test_report.md
 data_krx/raw/positions/current_positions.csv
 ```
 
-필수 컬럼:
+최소 입력 컬럼:
+
+```csv
+ticker,quantity
+```
+
+예:
+
+```csv
+ticker,quantity
+005930,5
+NVDA,2.415
+```
+
+`name`, `current_price`, `market_value`는 가능한 경우 로컬 가격 데이터의 최신 종가와 KRX reference에서 자동 보강된다. KRX ETF/ETN은 보유 분석 실행 시 KRX 증권상품 일별매매정보로 가격을 수집한다. `avg_price`가 없으면 손익률은 0으로 계산된다. 기존처럼 아래 컬럼을 직접 넣어도 된다.
 
 ```csv
 ticker,name,quantity,avg_price,current_price,market_value
-```
-
-최소로는 아래 두 컬럼만 있어도 된다.
-
-```csv
-ticker,market_value
 ```
 
 현재 보유비중과 모델 allocator 목표비중을 비교하려면 아래 명령을 실행한다.

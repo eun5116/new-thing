@@ -34,6 +34,7 @@ def evaluate_policy(
     ticker: str,
     initial_cash: float = 1_000_000.0,
     env_config: TradingEnvConfig | None = None,
+    feature_columns: list[str] | None = None,
 ) -> PolicyEvaluation:
     try:
         from stable_baselines3 import PPO
@@ -47,6 +48,7 @@ def evaluate_policy(
     env = StockTradingEnv(
         features,
         ticker=ticker,
+        feature_columns=feature_columns,
         config=env_config or TradingEnvConfig(initial_cash=initial_cash),
     )
     model = PPO.load(model_path)

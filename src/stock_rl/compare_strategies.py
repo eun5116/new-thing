@@ -11,6 +11,14 @@ from stock_rl.evaluate_policy import evaluate_policy
 from stock_rl.trading_env import TradingEnvConfig
 
 
+def _feature_columns_for_config(config: dict) -> list[str] | None:
+    if config["training"].get("feature_scope") != "us_portfolio":
+        return None
+    from stock_rl.build_us_portfolio_features import US_FEATURE_COLUMNS
+
+    return US_FEATURE_COLUMNS
+
+
 def resolve_model_path(model_path: Path) -> Path | None:
     if model_path.exists():
         return model_path
@@ -32,6 +40,7 @@ def compare_strategies(
     models_path = project_path(config_path, model_dir)
     features = pd.read_parquet(features_path)
     env_config = TradingEnvConfig(**config["trading"])
+    feature_columns = _feature_columns_for_config(config)
 
     rows = []
     for ticker in config["market"]["tickers"]:
@@ -56,7 +65,13 @@ def compare_strategies(
         }
         if resolved_model_path is not None:
             try:
-                policy = evaluate_policy(str(resolved_model_path), str(features_path), ticker, env_config=env_config)
+                policy = evaluate_policy(
+                    str(resolved_model_path),
+                    str(features_path),
+                    ticker,
+                    env_config=env_config,
+                    feature_columns=feature_columns,
+                )
                 row.update(
                     {
                         "policy_cumulative_return": policy.cumulative_return,
