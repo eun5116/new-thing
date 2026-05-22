@@ -377,6 +377,8 @@ reports/portfolio_policy_sheet_YYYYMMDD.md
 
 이 시트는 자동 주문표가 아니라 자산군별 총 비중과 종목별 최대 비중을 확인하는 risk overlay다. E032 target은 KRX 모델 종목에만 적용하고, 미국 주식/ETF/모델 밖 KRX 종목은 `configs/portfolio_policy.yaml`의 그룹 한도로 관리한다.
 
+미국 포트폴리오 target 생성도 같은 정책 파일을 읽는다. `reports/us_portfolio_targets_YYYYMMDD.csv`에는 모델 원신호인 `raw_target_ratio`와 정책 cap 적용 후 실제 운용 기준인 `target_ratio`가 함께 기록된다. 예를 들어 `us_speculative`는 종목별 최대 2%, `us_large_cap`은 종목별 최대 10%, `etf_core`는 종목별 최대 15%를 기본 cap으로 쓴다.
+
 ## 8. 데이터 수집 구조
 
 KRX OpenAPI는 일별 `basDd` 기준으로 데이터를 준다. 프로젝트는 API 호출을 줄이기 위해 아래를 적용한다.
@@ -470,6 +472,47 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.train_rl \
 - 기존 E032와 새 모델의 동일 조건 비교
 - portfolio allocator 기준 재평가
 - test 성과뿐 아니라 valid/test 일관성 확인
+
+### 방어형 주간 재학습
+
+퀀텀/고변동 테마 비중을 낮추고, 한국 주식 및 방어적 지수 운용을 우선할 때는 E035 방어형 config를 쓴다.
+
+```text
+configs/KRX_E035_defensive_retrain.yaml
+models/ppo_KRX_E035_defensive_retrain.zip
+```
+
+E035는 E032와 같은 48종목 KRX universe를 쓰되, 학습 구간을 2024년까지 확장하고 목표 노출 상한, drawdown penalty, turnover penalty를 더 보수적으로 잡는다. valid 구간은 2025년, test/live 구간은 2026년 이후로 둔다.
+
+데이터 수집 없이 현재 로컬 feature로 재학습/평가/target 생성을 한 번에 실행:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.weekly_retrain \
+  --config configs/KRX_E035_defensive_retrain.yaml \
+  --rule strong_trend_full_else070
+```
+
+장마감 후 데이터까지 갱신하고 재학습:
+
+```bash
+scripts/weekly_retrain_defensive.sh
+```
+
+실행 결과는 아래에 run id별로 남는다.
+
+```text
+reports/retrain/YYYYMMDD_HHMMSS/manifest.json
+reports/retrain/YYYYMMDD_HHMMSS/regime_exposure_cap_valid_summary.csv
+reports/retrain/YYYYMMDD_HHMMSS/regime_exposure_cap_test_summary.csv
+```
+
+학습은 건너뛰고 현재 모델로 평가/target만 재생성:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.weekly_retrain \
+  --config configs/KRX_E035_defensive_retrain.yaml \
+  --skip-train
+```
 
 ## 11. 테스트
 

@@ -657,3 +657,18 @@ ETF와 미국 주식은 현재 모델 target이 없으므로 손익/비중 중�
 - `manual_review`: KODEX/TIGER ETF
 
 이 label은 자동 주문이 아니라, 기존 분석 결과를 빠르게 읽기 위한 규칙 기반 요약이다.
+
+### 2026-05-22 US target generation compatibility
+
+미국 포트폴리오 target 생성 시 저장된 PPO 모델의 observation size에 맞춰 feature column set을 선택하도록 보강했다.
+
+구현:
+
+- `src/stock_rl/update_us_portfolio_targets.py`
+
+검증:
+
+- `PYTHONPATH=src .venv/bin/python -m pytest -q`
+- 결과: `32 passed`
+- `PYTHONPATH=src .venv/bin/python -m stock_rl.update_us_portfolio_targets --config configs/US_PORTFOLIO_HELD.yaml --skip-collect --skip-sec`
+- 결과: `as_of=2026-05-21`, `tickers=8`, `avg_target=81.2%`

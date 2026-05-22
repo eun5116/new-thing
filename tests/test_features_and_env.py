@@ -15,12 +15,16 @@ from stock_rl.collection_state import load_collection_state, mark_empty_response
 from stock_rl.krx_openapi import normalize_stock_daily
 from stock_rl.smoke_env import run_smoke
 from stock_rl.trading_env import MultiTickerTradingEnv, StockTradingEnv, TradingEnvConfig
+from stock_rl.update_us_portfolio_targets import _feature_columns_for_model, _policy_name_cap
+from stock_rl.build_features import FEATURE_COLUMNS
+from stock_rl.build_us_portfolio_features import US_FEATURE_COLUMNS
 from stock_rl.update_daily_targets import (
     _index_summary,
     infer_incremental_start,
     infer_index_collection_starts,
     infer_market_collection_starts,
 )
+from stock_rl.weekly_retrain import _run_id
 
 
 def sample_prices():
@@ -71,6 +75,33 @@ def test_position_loaders_recalculate_market_value_from_quantity_and_current_pri
     assert rebalance_positions.loc[rebalance_positions["ticker"] == "005930", "market_value"].iloc[0] == 1_405_000
     assert round(float(analysis_positions.loc[analysis_positions["ticker"] == "AMD", "market_value"].iloc[0]), 2) == 53429.04
     assert round(float(rebalance_positions.loc[rebalance_positions["ticker"] == "AMD", "market_value"].iloc[0]), 2) == 53429.04
+
+
+def test_portfolio_policy_classifies_qqqm_as_core_etf():
+    policy = {
+        "ticker_groups": {"QQQM": "etf_core"},
+        "groups": {"etf_core": {}, "manual_review": {}},
+    }
+    row = pd.Series({"ticker": "QQQM", "asset_scope": "us_or_global", "volatility_20d_pct": 10, "current_weight_pct": 4})
+
+    assert classify_asset(row, policy) == "etf_core"
+
+
+def test_us_policy_name_cap_uses_ticker_group_limit():
+    policy = {
+        "groups": {
+            "us_speculative": {"label": "US speculative", "max_name_weight_pct": 2.0},
+            "us_large_cap": {"label": "US large cap", "max_name_weight_pct": 10.0},
+        },
+        "ticker_groups": {"IONQ": "us_speculative"},
+    }
+
+    assert _policy_name_cap("IONQ", policy) == (0.02, "us_speculative", "US speculative")
+    assert _policy_name_cap("NVDA", policy) == (0.10, "us_large_cap", "US large cap")
+
+
+def test_weekly_retrain_run_id_uses_timestamp_format():
+    assert _run_id(pd.Timestamp("2026-05-22 15:04:05").to_pydatetime()) == "20260522_150405"
 
 
 def test_add_price_features_uses_next_day_target():
@@ -818,6 +849,27 @@ def test_smoke_runner_uses_existing_feature_file(tmp_path):
     assert result["ticker"] == "SPY"
     assert result["steps"] == 5
     assert result["last_observation_size"] > 0
+
+
+def test_us_target_feature_columns_match_model_observation_size():
+    features = pd.DataFrame(columns=[*US_FEATURE_COLUMNS, "event_fed_cut"])
+    legacy_columns = [*FEATURE_COLUMNS, "event_fed_cut", "event_recent_20d", "event_recent_5d"]
+
+    assert _feature_columns_for_model(features, len(US_FEATURE_COLUMNS) + 2) == US_FEATURE_COLUMNS
+    assert _feature_columns_for_model(features, len(US_FEATURE_COLUMNS) + 3) == [*US_FEATURE_COLUMNS, "event_fed_cut"]
+    assert _feature_columns_for_model(features, len(FEATURE_COLUMNS) + 2) == FEATURE_COLUMNS
+    assert _feature_columns_for_model(features, len(legacy_columns) + 2) == legacy_columns
+
+
+def test_us_target_feature_columns_reject_unknown_observation_size():
+    features = pd.DataFrame(columns=US_FEATURE_COLUMNS)
+
+    try:
+        _feature_columns_for_model(features, 999)
+    except ValueError as exc:
+        assert "no US feature column set matches model observation size 999" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
 
 
 def test_krx_stock_daily_normalization_filters_tickers():

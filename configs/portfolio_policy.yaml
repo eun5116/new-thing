@@ -13,25 +13,25 @@ groups:
 
   us_large_cap:
     label: US large cap / defensive
-    max_total_weight_pct: 25.0
+    max_total_weight_pct: 30.0
     max_name_weight_pct: 10.0
     action: trend_risk
 
   us_speculative:
     label: US speculative
-    max_total_weight_pct: 8.0
-    max_name_weight_pct: 3.0
+    max_total_weight_pct: 5.0
+    max_name_weight_pct: 2.0
     action: high_vol_cap
 
   gold:
     label: Gold hedge
-    max_total_weight_pct: 8.0
-    max_name_weight_pct: 8.0
+    max_total_weight_pct: 10.0
+    max_name_weight_pct: 10.0
     action: hedge
 
   etf_core:
     label: Core ETF
-    max_total_weight_pct: 25.0
+    max_total_weight_pct: 35.0
     max_name_weight_pct: 15.0
     action: core_etf
 
@@ -48,6 +48,11 @@ groups:
     action: manual_review
 
 ticker_groups:
+  SPY: etf_core
+  VOO: etf_core
+  QQQ: etf_core
+  QQQM: etf_core
+  SCHD: etf_core
   GLD: gold
   NVDA: us_large_cap
   AMD: us_large_cap

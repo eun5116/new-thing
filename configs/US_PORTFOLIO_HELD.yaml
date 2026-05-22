@@ -18,7 +18,7 @@
       "QQQ"
     ],
     "primary_benchmark": "SPY",
-    "start": "2020-01-01",
+    "start": "2010-01-01",
     "end": null,
     "price_source": "yfinance"
   },

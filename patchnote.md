@@ -651,3 +651,20 @@
 - 검증:
   - `PYTHONPATH=src .venv/bin/python -m pytest -q`
   - 결과: `25 passed`
+
+### US Target Generation Compatibility
+
+- 수정 파일:
+  - `src/stock_rl/update_us_portfolio_targets.py`
+  - `tests/test_features_and_env.py`
+  - `daily_log.md`
+- 구현 내용:
+  - 미국 포트폴리오 target 생성 시 PPO 모델의 `observation_space` 크기에 맞는 feature column set을 자동 선택한다.
+  - 현재 모델처럼 legacy event column 구성을 사용한 경우도 fallback으로 지원한다.
+  - 지원하지 않는 observation size는 시도한 후보 크기와 함께 명확히 실패하게 했다.
+- 확인:
+  - `reports/us_portfolio_targets_20260521.csv`
+  - as_of `2026-05-21`, 8 tickers, average target `81.2%`
+- 검증:
+  - `PYTHONPATH=src .venv/bin/python -m pytest -q`
+  - 결과: `32 passed`

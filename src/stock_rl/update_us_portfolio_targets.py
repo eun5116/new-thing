@@ -6,11 +6,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from stock_rl.build_features import FEATURE_COLUMNS
 from stock_rl.build_us_portfolio_features import US_FEATURE_COLUMNS, build_us_features, collect_us_prices
 from stock_rl.config import load_config, project_path
-from stock_rl.evaluate_regime_exposure_cap import _feature_columns, _target_ratio_from_action
+from stock_rl.evaluate_regime_exposure_cap import _feature_columns as _legacy_feature_columns
+from stock_rl.evaluate_regime_exposure_cap import _target_ratio_from_action
 from stock_rl.sec_edgar import collect_sec_companyfacts
 from stock_rl.trading_env import TradingEnvConfig
+
+
+DEFAULT_POLICY_PATH = "configs/portfolio_policy.yaml"
 
 
 def latest_raw_price_start(config_path: str | Path) -> str:
@@ -30,7 +35,11 @@ def latest_raw_price_start(config_path: str | Path) -> str:
     return (latest + pd.Timedelta(days=1)).date().isoformat()
 
 
-def generate_us_targets(config_path: str | Path, out_path: str | Path | None = None) -> Path:
+def generate_us_targets(
+    config_path: str | Path,
+    out_path: str | Path | None = None,
+    policy_path: str | Path = DEFAULT_POLICY_PATH,
+) -> Path:
     try:
         from stable_baselines3 import PPO
     except ImportError as exc:
@@ -41,13 +50,14 @@ def generate_us_targets(config_path: str | Path, out_path: str | Path | None = N
     features_path = project_path(config_path, data_dir, "processed", "daily_features.parquet")
     features = pd.read_parquet(features_path)
     features["date"] = pd.to_datetime(features["date"])
-    feature_columns = US_FEATURE_COLUMNS if config["training"].get("feature_scope") == "us_portfolio" else _feature_columns(features)
     env_config = TradingEnvConfig(**config["trading"])
     model_name = config["training"]["model_name"]
     model_path = project_path(config_path, "models", f"{model_name}.zip")
     if not model_path.exists():
         model_path = project_path(config_path, "models", model_name)
     model = PPO.load(model_path)
+    feature_columns = _feature_columns_for_model(features, model.observation_space.shape[0])
+    policy = _load_policy(config_path, policy_path)
 
     rows = []
     for ticker in config["market"]["tickers"]:
@@ -58,13 +68,23 @@ def generate_us_targets(config_path: str | Path, out_path: str | Path | None = N
         obs = np.asarray([float(row[col]) for col in feature_columns] + [1.0, 0.0], dtype=np.float32)
         action, _ = model.predict(obs, deterministic=True)
         action = int(action)
-        target_ratio = _target_ratio_from_action(action, env_config)
+        raw_target_ratio = _target_ratio_from_action(action, env_config)
+        policy_cap, policy_group, policy_label = _policy_name_cap(ticker, policy)
+        target_ratio = min(raw_target_ratio, policy_cap)
+        policy_cap_reason = "name_cap" if target_ratio < raw_target_ratio else "none"
         rows.append(
             {
                 "as_of_date": row["date"].date().isoformat(),
                 "ticker": str(ticker),
                 "model_name": model_name,
                 "action": action,
+                "raw_target_ratio": raw_target_ratio,
+                "raw_target_ratio_pct": round(raw_target_ratio * 100.0, 1),
+                "policy_group": policy_group,
+                "policy_group_label": policy_label,
+                "policy_name_cap": policy_cap,
+                "policy_name_cap_pct": round(policy_cap * 100.0, 1),
+                "policy_cap_reason": policy_cap_reason,
                 "target_ratio": target_ratio,
                 "target_ratio_pct": round(target_ratio * 100.0, 1),
                 "return_20d": float(row["return_20d"]),
@@ -76,12 +96,51 @@ def generate_us_targets(config_path: str | Path, out_path: str | Path | None = N
             }
         )
 
-    result = pd.DataFrame(rows).sort_values(["target_ratio", "relative_strength_20d"], ascending=[False, False])
+    result = pd.DataFrame(rows).sort_values(
+        ["target_ratio", "raw_target_ratio", "relative_strength_20d"],
+        ascending=[False, False, False],
+    )
     as_of = result["as_of_date"].max() if not result.empty else pd.Timestamp.today().date().isoformat()
     path = Path(out_path) if out_path else project_path(config_path, "reports", f"us_portfolio_targets_{as_of.replace('-', '')}.csv")
     path.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(path, index=False)
     return path
+
+
+def _load_policy(config_path: str | Path, policy_path: str | Path) -> dict:
+    path = Path(policy_path)
+    if not path.is_absolute():
+        path = project_path(config_path, policy_path)
+    if not path.exists():
+        return {}
+    return load_config(path)
+
+
+def _policy_name_cap(ticker: str, policy: dict) -> tuple[float, str, str]:
+    ticker_groups = {str(key).upper(): str(value) for key, value in policy.get("ticker_groups", {}).items()}
+    group = ticker_groups.get(str(ticker).upper(), "us_large_cap")
+    settings = policy.get("groups", {}).get(group, policy.get("groups", {}).get("manual_review", {}))
+    cap_pct = float(settings.get("max_name_weight_pct", 100.0))
+    label = str(settings.get("label", group))
+    return max(0.0, min(cap_pct / 100.0, 1.0)), group, label
+
+
+def _feature_columns_for_model(features: pd.DataFrame, observation_size: int) -> list[str]:
+    event_columns = sorted(
+        column for column in features.columns if column.startswith("event_") and column not in US_FEATURE_COLUMNS
+    )
+    candidates = [
+        US_FEATURE_COLUMNS,
+        [*US_FEATURE_COLUMNS, *event_columns],
+        FEATURE_COLUMNS,
+        [*FEATURE_COLUMNS, *event_columns],
+        _legacy_feature_columns(features),
+    ]
+    for columns in candidates:
+        if len(columns) + 2 == observation_size:
+            return columns
+    sizes = ", ".join(str(len(columns) + 2) for columns in candidates)
+    raise ValueError(f"no US feature column set matches model observation size {observation_size}; tried {sizes}")
 
 
 def update_paper_log(config_path: str | Path, target_path: str | Path) -> Path:
@@ -129,12 +188,13 @@ def update_us_portfolio_targets(
     end: str | None = None,
     skip_collect: bool = False,
     skip_sec: bool = False,
+    policy_path: str = DEFAULT_POLICY_PATH,
 ) -> dict[str, object]:
     resolved_start = start or latest_raw_price_start(config_path)
     price_paths = [] if skip_collect else collect_us_prices(config_path, start=resolved_start, end=end)
     feature_paths = build_us_features(config_path)
     sec_paths = {} if skip_sec else collect_sec_companyfacts(config_path)
-    target_path = generate_us_targets(config_path)
+    target_path = generate_us_targets(config_path, policy_path=policy_path)
     paper_log_path = update_paper_log(config_path, target_path)
     targets = pd.read_csv(target_path)
     return {
@@ -160,8 +220,9 @@ def main() -> None:
     parser.add_argument("--end", default=None)
     parser.add_argument("--skip-collect", action="store_true")
     parser.add_argument("--skip-sec", action="store_true")
+    parser.add_argument("--policy", default=DEFAULT_POLICY_PATH)
     args = parser.parse_args()
-    result = update_us_portfolio_targets(args.config, args.start, args.end, args.skip_collect, args.skip_sec)
+    result = update_us_portfolio_targets(args.config, args.start, args.end, args.skip_collect, args.skip_sec, args.policy)
     summary = result["summary"]
     print(f"collection: {result['collection_start']}..{result['collection_end']}")
     print(f"price_files: {result['price_files']}")

@@ -18,7 +18,7 @@
       "QQQ"
     ],
     "primary_benchmark": "SPY",
-    "start": "2020-01-01",
+    "start": "2010-01-01",
     "end": null,
     "price_source": "yfinance"
   },
@@ -50,7 +50,7 @@
   },
   "training": {
     "algorithm": "PPO",
-    "total_timesteps": 75000,
+    "total_timesteps": 150000,
     "seed": 42,
     "train_scope": "multi_ticker",
     "feature_scope": "us_portfolio",
