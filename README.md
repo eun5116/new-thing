@@ -178,6 +178,48 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.build_report_dashboard \
 reports/report_dashboard_YYYYMMDD.png
 ```
 
+## 주간 시장 리포트
+
+기존 `weekly_market_report` 기능은 `stock_rl` 모듈로 통합했습니다. KOSPI 시가총액 상위 20종목, S&P 500 시가총액 상위 20종목, 2주 모멘텀 알림, PDF/HTML/TXT/JSON 산출물을 한 번에 생성합니다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.weekly_market_report --dry-run
+```
+
+외부 네트워크가 불안정하거나 캐시 기반 렌더링만 확인하려면 오프라인 모드로 실행합니다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.weekly_market_report --dry-run --offline
+```
+
+간단히 실행하려면 스크립트를 사용할 수 있습니다.
+
+```bash
+scripts/run_weekly_market_report.sh --dry-run
+```
+
+주간 리포트 산출물은 아래에 저장됩니다.
+
+```text
+reports/weekly_market/
+```
+
+캐시와 누적 history는 모델 입력 후보로 재사용하기 쉽도록 아래에 저장됩니다.
+
+```text
+data_weekly_market/cache/
+data_weekly_market/history/
+```
+
+모멘텀 알림 설정은 아래 파일에서 관리합니다.
+
+```text
+configs/weekly_market/kospi_alerts.yaml
+configs/weekly_market/us_equities_alerts.yaml
+```
+
+이 리포트는 바로 매매 지시가 아니라, 주간 시장 흐름과 후보군을 RL 운용 판단에 붙이는 보조 입력입니다. 이후 `reports/research`, `reports/macro`, `reports/retrain`과 함께 확인합니다.
+
 ## 이벤트 CSV 스키마
 
 `data/raw/events/events.csv`는 아래 컬럼을 사용합니다.

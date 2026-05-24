@@ -1,0 +1,80 @@
+{
+  "project": {
+    "data_dir": "data_krx_example_other_full"
+  },
+  "market": {
+    "tickers": [
+      "047810",
+      "009830",
+      "095660",
+      "134790",
+      "361610",
+      "317770",
+      "453860",
+      "311690",
+      "328130",
+      "323990",
+      "005930",
+      "086520",
+      "272210",
+      "267250",
+      "035720",
+      "034020",
+      "003670",
+      "007660",
+      "326030",
+      "003570",
+      "377300"
+    ],
+    "start": "2025-01-01",
+    "end": null,
+    "price_source": "krx_openapi",
+    "krx_market": "MIXED",
+    "ticker_markets": {
+      "047810": "KOSPI",
+      "009830": "KOSPI",
+      "095660": "KOSDAQ",
+      "134790": "KOSPI",
+      "361610": "KOSPI",
+      "317770": "KOSDAQ",
+      "453860": "KOSDAQ",
+      "311690": "KOSDAQ",
+      "328130": "KOSDAQ",
+      "323990": "KOSDAQ",
+      "005930": "KOSPI",
+      "086520": "KOSDAQ",
+      "272210": "KOSPI",
+      "267250": "KOSPI",
+      "035720": "KOSPI",
+      "034020": "KOSPI",
+      "003670": "KOSPI",
+      "007660": "KOSPI",
+      "326030": "KOSPI",
+      "003570": "KOSPI",
+      "377300": "KOSPI"
+    }
+  },
+  "features": {
+    "adjusted_price_column": "adj_close",
+    "train_end": "2024-12-31",
+    "valid_end": "2025-12-31",
+    "event_lag_days": 1
+  },
+  "trading": {
+    "initial_cash": 1000000.0,
+    "transaction_cost_pct": 0.001,
+    "volatility_penalty": 0.05,
+    "max_position_ratio": 1.0,
+    "min_target_position_ratio": 0.4,
+    "action_mode": "target_position",
+    "reward_mode": "ma20_60_drawdown_hybrid",
+    "target_position_bins": 6
+  },
+  "training": {
+    "algorithm": "PPO",
+    "total_timesteps": 100000,
+    "seed": 42,
+    "train_scope": "multi_ticker",
+    "model_name": "ppo_KRX_EXAMPLE_OTHER_FULL"
+  }
+}
