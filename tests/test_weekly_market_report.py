@@ -81,6 +81,14 @@ class KOSPIAlertFallbackTests(unittest.TestCase):
         self.assertTrue(result["triggered"])
         self.assertEqual(result["signal"], "short_term_overheat")
 
+    def test_sp500_top20_uses_static_fallback_when_live_and_cache_are_unavailable(self):
+        with patch.object(weekly_market_report, "_is_offline_mode", return_value=False), patch.object(
+            weekly_market_report, "get_sp500_tickers", side_effect=RuntimeError("sp500 unavailable")
+        ), patch.object(weekly_market_report, "SP500_CACHE_PATH", Path("/tmp/stock_rl_missing_sp500_cache.json")):
+            tickers = weekly_market_report.get_sp500_top20()
+
+        self.assertEqual(tickers, weekly_market_report.DEFAULT_SP50020)
+
 
 if __name__ == "__main__":
     unittest.main()

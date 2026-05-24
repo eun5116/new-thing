@@ -81,6 +81,28 @@ DEFAULT_KOSPI20 = [
     ("LG전자", "066570"),
     ("SK텔레콤", "017670"),
 ]
+DEFAULT_SP50020 = [
+    "MSFT",
+    "AAPL",
+    "NVDA",
+    "AMZN",
+    "GOOGL",
+    "GOOG",
+    "META",
+    "BRK-B",
+    "LLY",
+    "AVGO",
+    "TSLA",
+    "JPM",
+    "V",
+    "UNH",
+    "XOM",
+    "MA",
+    "COST",
+    "HD",
+    "PG",
+    "NFLX",
+]
 OFFLINE_MODE = False
 _PYKRX_STOCK = None
 _PYKRX_KRX_WRAP = None
@@ -1037,16 +1059,20 @@ def get_sp500_top20():
             cached_date = cached_payload.get("date")
             if cached_date:
                 age_days = (dt.datetime.now() - dt.datetime.fromisoformat(cached_date)).days
-                if age_days <= 7:
+                if age_days <= 7 and cached_payload.get("tickers"):
                     return cached_payload.get("tickers", [])
         except Exception:
             cached_payload = None
+    if _is_offline_mode():
+        if cached_payload and cached_payload.get("tickers"):
+            return cached_payload.get("tickers", [])
+        return DEFAULT_SP50020
     try:
         tickers = get_sp500_tickers()
     except Exception:
         if cached_payload and cached_payload.get("tickers"):
             return cached_payload.get("tickers", [])
-        return []
+        return DEFAULT_SP50020
     caps = []
     for t in tickers:
         try:
@@ -1060,6 +1086,8 @@ def get_sp500_top20():
     top20 = [t for t, _ in caps[:20]]
     if not top20 and cached_payload and cached_payload.get("tickers"):
         return cached_payload.get("tickers", [])
+    if not top20:
+        top20 = DEFAULT_SP50020
     # save cache
     try:
         SP500_CACHE_PATH.write_text(json.dumps({
