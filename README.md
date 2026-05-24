@@ -198,6 +198,8 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.weekly_market_report --dry-run --off
 scripts/run_weekly_market_report.sh --dry-run
 ```
 
+메일 발송까지 사용하려면 루트의 `.env.example`을 참고해 `.env`를 채웁니다. Gmail SMTP를 쓰는 경우 `SMTP_PASS`는 일반 비밀번호가 아니라 16자리 앱 비밀번호여야 합니다.
+
 주간 리포트 산출물은 아래에 저장됩니다.
 
 ```text
