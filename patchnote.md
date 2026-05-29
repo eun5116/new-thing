@@ -668,3 +668,63 @@
 - 검증:
   - `PYTHONPATH=src .venv/bin/python -m pytest -q`
   - 결과: `32 passed`
+
+## 2026-05-26 NPS Feature And E036
+
+- 추가 파일:
+  - `configs/KRX_E036_nps_core_etf.yaml`
+  - `src/stock_rl/analyze_nps_portfolio.py`
+- 수정 파일:
+  - `src/stock_rl/build_features.py`
+  - `src/stock_rl/train_rl.py`
+  - `src/stock_rl/evaluate_regime_exposure_cap.py`
+  - `src/stock_rl/generate_current_targets.py`
+  - `tests/test_features_and_env.py`
+  - `README.md`
+  - `docs/operations_guide.md`
+  - `daily_log.md`
+- 구현 내용:
+  - 국민연금 2020-2024 국내/해외 주식 종목별 투자 현황 XLSX를 정규화하는 분석기를 추가했다.
+  - `reports/nps/nps_holding_changes_2020_2024.csv`를 KRX feature에 붙이는 `krx_nps` feature scope를 추가했다.
+  - NPS 보유 여부, 5년 연속 보유, 2024년 순위 점수, 2024년 비중, 2020-2024 비중 변화, core top30, 2022년 이후 신규 리더 feature를 추가했다.
+  - 저장된 PPO 모델의 observation size에 맞춰 NPS/event feature column set을 선택하도록 target/evaluator를 보강했다.
+  - train split에 충분한 row가 없는 ticker는 `allow_missing_tickers` 설정으로 학습 샘플러에서 제외할 수 있게 했다.
+  - NPS feature 매칭과 dynamic event column 확장 테스트를 추가했다.
+- 산출물:
+  - `reports/nps/nps_holdings_2020_2024.csv`
+  - `reports/nps/nps_holding_changes_2020_2024.csv`
+  - `reports/nps/nps_current_position_overlap.csv`
+  - `reports/nps/nps_portfolio_analysis_2020_2024.md`
+  - `reports/nps_e036_training_result_20260526.md`
+  - `reports/current_targets_20260526_E036_nps_core_etf.csv`
+- 해석:
+  - E036은 E032를 대체하는 기본 운용 모델이 아니라 국민연금 core/비중 증가 종목과 국내 상장 미국 ETF 후보를 보는 보조 관찰 모델이다.
+  - E036 target은 즉시 매수 지시가 아니라 장기 대형주 기준선과 관심군 확인용으로 사용한다.
+- 검증:
+  - `PYTHONPATH=src .venv/bin/python -m pytest tests/test_features_and_env.py -q`
+  - 결과: `39 passed`
+
+### 2026-05-29 E036 Daily Output Refresh
+
+- 수정 파일:
+  - `src/stock_rl/update_daily_targets.py`
+  - `tests/test_features_and_env.py`
+  - `docs/operations_guide.md`
+  - `daily_log.md`
+  - `patchnote.md`
+- 구현 내용:
+  - ETF가 포함된 KRX config에서 종목 가격 수집은 ETF market을 유지하되, 시장 지수 수집은 KOSPI/KOSDAQ만 대상으로 제한했다.
+  - `infer_index_collection_starts`가 ETF 같은 비지수 market을 무시하도록 회귀 테스트를 추가했다.
+  - trading sheet와 current position analysis의 E032 고정 설명 문구를 실제 target CSV의 `model_name` 기반으로 바꿨다.
+  - E036 최신 target, trading sheet, target changes, rebalance orders, current position analysis, decision sheet, dashboard를 재생성했다.
+- 산출물:
+  - `reports/current_targets_20260528_strong_trend_full_else070.csv`
+  - `reports/trading_sheet_20260528_strong_trend_full_else070.md`
+  - `reports/target_changes_20260528_strong_trend_full_else070.md`
+  - `reports/rebalance_orders_20260528_strong_trend_full_else070.md`
+  - `reports/current_position_analysis_20260529.md`
+  - `reports/portfolio_decision_sheet_20260529.md`
+  - `reports/report_dashboard_20260529.png`
+- 확인:
+  - KRX 2026-05-29 응답은 비어 있어 최신 target 기준일은 `2026-05-28`이다.
+  - E036 summary: `tickers=45`, `avg_target=73.2%`, `stale=0`, `max_lag=0d`

@@ -147,16 +147,17 @@ def build_trading_sheet(
     output_dir = Path(out_dir) if out_dir else project_path(config_path, "reports")
     output_dir.mkdir(parents=True, exist_ok=True)
     as_of = targets["as_of_date"].max().strftime("%Y%m%d")
+    model_name = str(targets["model_name"].dropna().iloc[0]) if "model_name" in targets.columns and not targets["model_name"].dropna().empty else "trained PPO policy"
     csv_path = output_dir / f"trading_sheet_{as_of}_{rule}.csv"
     md_path = output_dir / f"trading_sheet_{as_of}_{rule}.md"
     png_path = output_dir / f"trading_sheet_{as_of}_{rule}.png"
     sheet.to_csv(csv_path, index=False)
     render_trading_sheet_png(sheet, png_path, rule)
-    _write_markdown(md_path, sheet, rule, resolved_target_path)
+    _write_markdown(md_path, sheet, rule, resolved_target_path, model_name)
     return {"csv": csv_path, "markdown": md_path, "png": png_path}
 
 
-def _write_markdown(path: Path, sheet: pd.DataFrame, rule: str, target_path: Path) -> None:
+def _write_markdown(path: Path, sheet: pd.DataFrame, rule: str, target_path: Path, model_name: str) -> None:
     as_of = sheet["as_of_date"].max().date().isoformat()
     lines = [
         f"# Trading Sheet - {as_of}",
@@ -171,7 +172,7 @@ def _write_markdown(path: Path, sheet: pd.DataFrame, rule: str, target_path: Pat
         "",
         "## How To Read This",
         "",
-        "`target_pct` is the exposure allowed by the trained E032 PPO policy plus the regime cap overlay. It is not a probability that the stock will rise.",
+        f"`target_pct` is the exposure allowed by `{model_name}` plus the regime cap overlay. It is not a probability that the stock will rise.",
         "",
         "- `100%`: PPO selected max exposure and the regime overlay allowed full risk.",
         "- `88%`: PPO selected a high but not max target, or the raw target was already below full exposure.",

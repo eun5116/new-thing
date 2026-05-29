@@ -10,6 +10,10 @@ from stock_rl.trading_env import MultiTickerTradingEnv, StockTradingEnv, Trading
 
 def _feature_columns_for_config(config: dict) -> list[str] | None:
     if config["training"].get("feature_scope") != "us_portfolio":
+        if config["training"].get("feature_scope") == "krx_nps":
+            from stock_rl.build_features import feature_columns_for_config
+
+            return feature_columns_for_config(config)
         return None
     from stock_rl.build_us_portfolio_features import US_FEATURE_COLUMNS
 
@@ -40,7 +44,11 @@ def train(config_path: str, ticker: str | None = None) -> str:
         available = set(train_features["ticker"].astype(str).map(normalize_ticker))
         missing = sorted(set(tickers).difference(available))
         if missing:
-            raise ValueError(f"tickers not found in training features: {missing}")
+            if config["training"].get("allow_missing_tickers"):
+                print(f"Skipping tickers without training rows: {missing}")
+                tickers = [ticker for ticker in tickers if ticker in available]
+            else:
+                raise ValueError(f"tickers not found in training features: {missing}")
         env = MultiTickerTradingEnv(train_features, tickers=tickers, feature_columns=feature_columns, config=env_config)
         model_ticker = "multi"
     else:

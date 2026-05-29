@@ -672,3 +672,95 @@ ETF와 미국 주식은 현재 모델 target이 없으므로 손익/비중 중�
 - 결과: `32 passed`
 - `PYTHONPATH=src .venv/bin/python -m stock_rl.update_us_portfolio_targets --config configs/US_PORTFOLIO_HELD.yaml --skip-collect --skip-sec`
 - 결과: `as_of=2026-05-21`, `tickers=8`, `avg_target=81.2%`
+
+## 2026-05-26
+
+### 국민연금 2020-2024 보유 데이터 정규화
+
+국민연금기금운용본부의 국내주식/해외주식 종목별 투자 현황 XLSX를 2020년 말부터 2024년 말까지 정규화했다.
+
+구현:
+
+- `src/stock_rl/analyze_nps_portfolio.py`
+
+산출물:
+
+- `reports/nps/nps_holdings_2020_2024.csv`
+- `reports/nps/nps_holding_changes_2020_2024.csv`
+- `reports/nps/nps_current_position_overlap.csv`
+- `reports/nps/nps_portfolio_analysis_2020_2024.md`
+
+목적은 국민연금의 장기 core 종목, 2020년 대비 비중 증가 종목, 2022년 이후 상위권 신규 편입 종목을 확인하는 것이다. 이 결과는 단기 매수 신호가 아니라 장기 기준선과 관찰군을 만들기 위한 자료다.
+
+### E036 국민연금 feature PPO
+
+NPS 변화표를 KRX feature에 붙이는 `krx_nps` feature scope를 추가하고, 새 universe로 E036을 학습했다.
+
+구현:
+
+- `configs/KRX_E036_nps_core_etf.yaml`
+- `src/stock_rl/build_features.py`
+- `src/stock_rl/train_rl.py`
+- `src/stock_rl/evaluate_regime_exposure_cap.py`
+- `src/stock_rl/generate_current_targets.py`
+
+추가 feature:
+
+- `nps_is_held_2024`
+- `nps_years_held_5y`
+- `nps_rank_2024_score`
+- `nps_weight_2024_pct`
+- `nps_weight_change_2020_2024_pp`
+- `nps_core_top30`
+- `nps_new_leader_since_2022`
+
+학습 결과:
+
+- model: `models/ppo_KRX_E036_nps_core_etf.zip`
+- config: `configs/KRX_E036_nps_core_etf.yaml`
+- universe: 45개
+- train rows: 34,497 rows, 43 tickers
+- valid rows: 10,669 rows, 45 tickers
+- test rows: 15,087 rows, 45 tickers
+- feature count: 52개 + cash/position 2개
+
+`443060`, `469070`은 train split에 충분한 row가 없어 학습 샘플러에서는 제외했고, valid/test와 최신 target 생성에는 포함했다.
+
+해석:
+
+- E036은 E032를 대체하는 기본 실전 모델이 아니다.
+- 국민연금 core top30, 비중 증가 종목, 국내 상장 미국 ETF 후보를 함께 보는 보조/관찰 모델로 둔다.
+- 최신 target은 매수 지시가 아니라 장기 대형주 기준선과 관심군 확인용으로 해석한다.
+
+### E036 마무리 보강
+
+NPS feature 매칭과 feature column 확장을 회귀 테스트로 추가했다. 국민연금 종목명은 KRX reference의 `abbrv` 우선, 필요 시 `name` fallback으로 매칭한다.
+
+검증:
+
+- `PYTHONPATH=src .venv/bin/python -m pytest tests/test_features_and_env.py -q`
+- 결과: `39 passed`
+
+### E036 최신 운용 산출물 갱신
+
+2026-05-29 실행 기준으로 KRX가 2026-05-29 데이터를 아직 비어 있는 응답으로 반환해 최신 feature 기준일은 2026-05-28로 잡혔다.
+
+산출물:
+
+- `reports/current_targets_20260528_strong_trend_full_else070.csv`
+- `reports/trading_sheet_20260528_strong_trend_full_else070.md`
+- `reports/target_changes_20260528_strong_trend_full_else070.md`
+- `reports/rebalance_orders_20260528_strong_trend_full_else070.md`
+- `reports/current_position_analysis_20260529.md`
+- `reports/portfolio_decision_sheet_20260529.md`
+- `reports/report_dashboard_20260529.png`
+
+요약:
+
+- as_of: `2026-05-28`
+- tickers: `45`
+- average target: `73.2%`
+- stale rows: `0`
+- max lag: `0d`
+
+E036 설정에 ETF market이 포함되면서 지수 수집도 `ETF`로 시도하던 문제를 고쳤다. 종목 가격 수집은 ETF를 허용하되, 시장 지수 수집은 KOSPI/KOSDAQ만 대상으로 제한한다.

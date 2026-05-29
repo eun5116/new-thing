@@ -1,7 +1,15 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from stock_rl.build_features import add_event_features, add_market_features, add_price_features, split_and_write
+from stock_rl.build_features import (
+    NPS_FEATURE_COLUMNS,
+    add_event_features,
+    add_market_features,
+    add_nps_features,
+    add_price_features,
+    feature_columns_for_config,
+    split_and_write,
+)
 from stock_rl.build_report_dashboard import build_report_dashboard
 from stock_rl.build_portfolio_policy_sheet import build_portfolio_policy_sheet, classify_asset
 from stock_rl.build_portfolio_decision_sheet import build_decision_sheet
@@ -9,6 +17,7 @@ from stock_rl.build_trading_sheet import build_trading_sheet
 from stock_rl.build_rebalance_orders import build_rebalance_orders
 from stock_rl.build_rebalance_orders import _load_positions as load_rebalance_positions
 from stock_rl.analyze_positions import _load_positions as load_analysis_positions
+from stock_rl.analyze_positions import _note_for_position
 from stock_rl.build_target_change_report import build_target_change_report
 from stock_rl.backtest_portfolio_allocator import simulate_portfolio
 from stock_rl.collection_state import load_collection_state, mark_empty_response, recently_checked_empty, save_collection_state
@@ -100,6 +109,12 @@ def test_us_policy_name_cap_uses_ticker_group_limit():
     assert _policy_name_cap("NVDA", policy) == (0.10, "us_large_cap", "US large cap")
 
 
+def test_position_note_uses_configured_model_name():
+    note = _note_for_position("005930", {"005930"}, set(), "ppo_KRX_E036_nps_core_etf")
+
+    assert note == "ppo_KRX_E036_nps_core_etf target available"
+
+
 def test_weekly_retrain_run_id_uses_timestamp_format():
     assert _run_id(pd.Timestamp("2026-05-22 15:04:05").to_pydatetime()) == "20260522_150405"
 
@@ -188,6 +203,62 @@ def test_split_and_write_keeps_latest_daily_feature_for_inference(tmp_path):
     assert daily["date"].max() == features["date"].max()
     assert daily.loc[daily["date"] == daily["date"].max(), "target_return_1d"].isna().all()
     assert train["target_return_1d"].notna().all()
+
+
+def test_add_nps_features_matches_krx_reference_abbreviation(tmp_path):
+    project = tmp_path / "project"
+    config_dir = project / "configs"
+    reference_dir = project / "data_krx" / "raw" / "reference"
+    nps_dir = project / "reports" / "nps"
+    config_dir.mkdir(parents=True)
+    reference_dir.mkdir(parents=True)
+    nps_dir.mkdir(parents=True)
+    config_path = config_dir / "test.yaml"
+    config = {
+        "project": {"data_dir": "data_krx"},
+        "features": {"nps": {"enabled": True, "path": "reports/nps/nps_holding_changes_2020_2024.csv"}},
+        "training": {"feature_scope": "krx_nps"},
+    }
+    pd.DataFrame(
+        {
+            "ticker": ["005930", "000660"],
+            "name": ["삼성전자보통주", "SK하이닉스"],
+            "abbrv": ["삼성전자", "SK하이닉스"],
+            "market": ["KOSPI", "KOSPI"],
+        }
+    ).to_parquet(reference_dir / "kospi_issue_base.parquet", index=False)
+    pd.DataFrame(
+        {
+            "asset_class": ["domestic"],
+            "name": ["삼성전자"],
+            "years_held": [5],
+            "first_year": [2020],
+            "rank_2024": [1],
+            "weight_2024_pct": [5.25],
+            "weight_change_2020_2024_pp": [1.5],
+        }
+    ).to_csv(nps_dir / "nps_holding_changes_2020_2024.csv", index=False)
+    features = pd.DataFrame({"date": pd.to_datetime(["2026-05-22", "2026-05-22"]), "ticker": ["005930", "000660"]})
+
+    enriched = add_nps_features(features, config_path, config)
+    samsung = enriched.loc[enriched["ticker"] == "005930"].iloc[0]
+    hynix = enriched.loc[enriched["ticker"] == "000660"].iloc[0]
+
+    assert samsung["nps_is_held_2024"] == 1.0
+    assert samsung["nps_years_held_5y"] == 1.0
+    assert samsung["nps_core_top30"] == 1.0
+    assert samsung["nps_weight_2024_pct"] == 5.25
+    assert hynix[NPS_FEATURE_COLUMNS].sum() == 0.0
+
+
+def test_feature_columns_for_krx_nps_includes_nps_and_dynamic_event_columns():
+    config = {"training": {"feature_scope": "krx_nps"}}
+    features = pd.DataFrame(columns=[*FEATURE_COLUMNS, *NPS_FEATURE_COLUMNS, "event_policy_recent_5d"])
+
+    columns = feature_columns_for_config(config, features)
+
+    assert set(NPS_FEATURE_COLUMNS).issubset(columns)
+    assert "event_policy_recent_5d" in columns
 
 
 def test_infer_incremental_start_from_latest_features(tmp_path):
@@ -298,6 +369,26 @@ def test_infer_index_collection_starts_from_raw_indices(tmp_path):
     assert infer_index_collection_starts(config_path) == {"KOSPI": "2026-05-14"}
 
 
+def test_infer_index_collection_starts_ignores_non_index_markets(tmp_path):
+    project = tmp_path / "project"
+    config_dir = project / "configs"
+    config_dir.mkdir(parents=True)
+    config_path = config_dir / "test.yaml"
+    config_path.write_text(
+        "project:\n"
+        "  data_dir: data_krx\n"
+        "market:\n"
+        "  start: '2020-01-01'\n"
+        "  tickers: ['000001', '379800']\n"
+        "  ticker_markets:\n"
+        "    '000001': KOSPI\n"
+        "    '379800': ETF\n",
+        encoding="utf-8",
+    )
+
+    assert infer_index_collection_starts(config_path) == {"KOSPI": "2020-01-01"}
+
+
 def test_build_target_change_report_compares_previous_target(tmp_path):
     project = tmp_path / "project"
     config_dir = project / "configs"
@@ -390,7 +481,7 @@ def test_build_trading_sheet_writes_png_snapshot(tmp_path):
             "feature_date": ["2026-05-13"],
             "ticker": ["SPY"],
             "rule": ["strong_trend_full_else070"],
-            "model_name": ["model"],
+            "model_name": ["ppo_TEST_MODEL"],
             "assumed_position_ratio": [0.0],
             "action": [5],
             "raw_target_ratio": [1.0],
@@ -412,6 +503,9 @@ def test_build_trading_sheet_writes_png_snapshot(tmp_path):
 
     assert result["png"].exists()
     assert result["png"].stat().st_size > 0
+    markdown = result["markdown"].read_text(encoding="utf-8")
+    assert "ppo_TEST_MODEL" in markdown
+    assert "trained E032 PPO policy" not in markdown
 
 
 def test_collection_state_tracks_recent_empty_response(tmp_path):

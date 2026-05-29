@@ -22,11 +22,19 @@ KRX 가격/지수 증분 수집
 - rule: `strong_trend_full_else070`
 - universe: KOSPI/KOSDAQ 48종목
 
+보조 관찰 후보:
+
+- model: `models/ppo_KRX_E036_nps_core_etf.zip`
+- config: `configs/KRX_E036_nps_core_etf.yaml`
+- rule: `strong_trend_full_else070`
+- universe: 국민연금 국내 core/비중 증가 종목, 현재 보유 KRX 종목, 국내 상장 미국 ETF 후보 45종목
+
 주의할 점:
 
 - 이 프로젝트는 매수/매도 추천 확정 시스템이 아니라, target ratio와 포트폴리오 후보를 계산하는 연구/운용 보조 도구다.
 - `target_pct`는 상승 확률이 아니다. 모델과 risk cap이 허용하는 목표 노출이다.
 - 최종 계좌 비중은 포트폴리오 allocator와 실제 보유 현황을 함께 봐야 한다.
+- E036은 E032 대체 모델이 아니라 국민연금 장기 보유 기준선과 관심군을 확인하는 보조 모델이다.
 
 ## 2. 매일 장마감 후 실행
 
@@ -215,7 +223,42 @@ reports/portfolio_allocator_test_report.md
 - E032 target basket은 Buy & Hold universe보다 좋지만, test에서는 MA20/60보다 약했다.
 - 다음 연구 후보는 E032와 MA20/60 중 어느 basket을 선택할지 정하는 portfolio-level selector다.
 
-## 7. 실제 보유 포지션 반영
+## 7. 국민연금 보유 데이터 보조 모델
+
+국민연금기금운용본부의 2020-2024 국내/해외 주식 종목별 투자 현황 XLSX는 `data_nps/raw/`에 둔다. 아래 명령으로 holdings, 변화표, 현재 보유종목 overlap, Markdown 분석 보고서를 만든다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.analyze_nps_portfolio \
+  --raw-dir data_nps/raw \
+  --positions data_krx/raw/positions/current_positions.csv \
+  --out-dir reports/nps
+```
+
+생성 파일:
+
+```text
+reports/nps/nps_holdings_2020_2024.csv
+reports/nps/nps_holding_changes_2020_2024.csv
+reports/nps/nps_current_position_overlap.csv
+reports/nps/nps_portfolio_analysis_2020_2024.md
+```
+
+E036은 `reports/nps/nps_holding_changes_2020_2024.csv`를 KRX feature에 붙인다. 추가되는 정적 feature는 국민연금 2024년 보유 여부, 5년 연속 보유 여부, 2024년 순위 점수, 2024년 비중, 2020-2024 비중 변화, core top30 여부, 2022년 이후 신규 리더 여부다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.update_daily_targets \
+  --config configs/KRX_E036_nps_core_etf.yaml \
+  --rule strong_trend_full_else070
+```
+
+E036의 해석:
+
+- 기본 실전 후보는 여전히 E032와 `strong_trend_full_else070`이다.
+- E036은 국민연금 core top30, 비중 증가 종목, 국내 상장 미국 ETF 후보를 한 화면에 보기 위한 보조 모델이다.
+- `443060`, `469070`처럼 train row가 부족한 종목은 학습 샘플러에서 빠질 수 있지만, valid/test와 최신 target 생성에는 포함된다.
+- E036 target은 즉시 매수 지시가 아니라 장기 대형주 기준선과 관찰군 확인용이다.
+
+## 8. 실제 보유 포지션 반영
 
 카카오페이증권 등에서 가져온 보유 내역은 CSV로 저장한다.
 
@@ -379,7 +422,7 @@ reports/portfolio_policy_sheet_YYYYMMDD.md
 
 미국 포트폴리오 target 생성도 같은 정책 파일을 읽는다. `reports/us_portfolio_targets_YYYYMMDD.csv`에는 모델 원신호인 `raw_target_ratio`와 정책 cap 적용 후 실제 운용 기준인 `target_ratio`가 함께 기록된다. 예를 들어 `us_speculative`는 종목별 최대 2%, `us_large_cap`은 종목별 최대 10%, `etf_core`는 종목별 최대 15%를 기본 cap으로 쓴다.
 
-## 8. 데이터 수집 구조
+## 9. 데이터 수집 구조
 
 KRX OpenAPI는 일별 `basDd` 기준으로 데이터를 준다. 프로젝트는 API 호출을 줄이기 위해 아래를 적용한다.
 
@@ -406,7 +449,7 @@ data_krx/raw/collection_state.json
 }
 ```
 
-## 9. 수동 실행 명령
+## 10. 수동 실행 명령
 
 ### 가격만 증분 수집
 
@@ -449,7 +492,7 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.build_target_change_report \
   --rule strong_trend_full_else070
 ```
 
-## 10. 학습과 재학습
+## 11. 학습과 재학습
 
 현재 E032 모델은 이미 학습된 상태다.
 
@@ -514,7 +557,7 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.weekly_retrain \
   --skip-train
 ```
 
-## 11. 테스트
+## 12. 테스트
 
 코드 변경 후에는 항상 아래를 실행한다.
 
@@ -526,10 +569,10 @@ PYTHONPATH=src .venv/bin/python -m pytest -q
 현재 기준:
 
 ```text
-24 passed
+44 passed
 ```
 
-## 12. 문제 해결
+## 13. 문제 해결
 
 ### 장마감 후에도 최신일이 안 바뀐다
 
@@ -579,7 +622,7 @@ reports/trading_sheet_YYYYMMDD_strong_trend_full_else070.md
 
 현재 모델 universe가 KRX 48종목이기 때문이다. `out_of_universe`는 “모델이 목표비중을 계산하지 않는 자산”이라는 의미다. 미국 주식/ETF까지 함께 운용하려면 별도 universe와 데이터 파이프라인을 추가해야 한다.
 
-## 13. 다음 개발 후보
+## 14. 다음 개발 후보
 
 우선순위는 아래 순서가 좋다.
 

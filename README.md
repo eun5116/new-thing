@@ -97,6 +97,27 @@ PYTHONPATH=src .venv/bin/python -m stock_rl.backtest_portfolio_allocator \
   --rebalance-frequency weekly
 ```
 
+## 국민연금 보유 데이터 보조 모델
+
+국민연금 2020-2024 국내/해외 주식 보유 XLSX는 아래 명령으로 정규화합니다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.analyze_nps_portfolio \
+  --raw-dir data_nps/raw \
+  --positions data_krx/raw/positions/current_positions.csv \
+  --out-dir reports/nps
+```
+
+생성된 `reports/nps/nps_holding_changes_2020_2024.csv`는 E036 설정에서 KRX 정적 feature로 사용합니다.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m stock_rl.update_daily_targets \
+  --config configs/KRX_E036_nps_core_etf.yaml \
+  --rule strong_trend_full_else070
+```
+
+E036은 현재 E032를 대체하는 기본 운용 모델이 아니라, 국민연금 core top30, 비중 증가 종목, 국내 상장 미국 ETF 후보를 함께 보는 보조/관찰 모델입니다. 최신 target은 매수 지시가 아니라 장기 대형주 기준선과 관심군 확인용으로 해석합니다.
+
 ## 실제 보유 포지션 반영
 
 카카오페이증권 등에서 가져온 보유 내역은 아래 CSV 포맷으로 저장합니다.

@@ -57,6 +57,16 @@ FEATURE_COLUMNS = [
     "event_recent_20d",
 ]
 
+NPS_FEATURE_COLUMNS = [
+    "nps_is_held_2024",
+    "nps_years_held_5y",
+    "nps_rank_2024_score",
+    "nps_weight_2024_pct",
+    "nps_weight_change_2020_2024_pp",
+    "nps_core_top30",
+    "nps_new_leader_since_2022",
+]
+
 MARKET_FEATURE_DEFAULTS = {
     "market_return_1d": 0.0,
     "market_return_5d": 0.0,
@@ -83,6 +93,16 @@ def clean_numeric_features(features: pd.DataFrame) -> pd.DataFrame:
     numeric_cols = clean.select_dtypes(include=[np.number]).columns
     clean[numeric_cols] = clean[numeric_cols].replace([np.inf, -np.inf], np.nan)
     return clean
+
+
+def feature_columns_for_config(config: dict, features: pd.DataFrame | None = None) -> list[str]:
+    base_columns = [*FEATURE_COLUMNS]
+    if config.get("training", {}).get("feature_scope") == "krx_nps":
+        base_columns.extend(NPS_FEATURE_COLUMNS)
+    if features is not None:
+        event_columns = sorted(column for column in features.columns if column.startswith("event_"))
+        base_columns.extend(column for column in event_columns if column not in base_columns)
+    return base_columns
 
 
 def read_price_files(price_dir: Path, tickers: list[str] | None = None) -> pd.DataFrame:
@@ -313,14 +333,94 @@ def add_event_recent_features(features: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
+def _read_krx_reference(config_path: str | Path, data_dir: str) -> pd.DataFrame:
+    reference_dir = project_path(config_path, data_dir, "raw", "reference")
+    frames = []
+    for path in [reference_dir / "kospi_issue_base.parquet", reference_dir / "kosdaq_issue_base.parquet"]:
+        if path.exists():
+            frames.append(pd.read_parquet(path, columns=["ticker", "name", "abbrv", "market"]))
+    if not frames:
+        return pd.DataFrame(columns=["ticker", "name", "abbrv", "market"])
+    reference = pd.concat(frames, ignore_index=True)
+    reference["ticker"] = reference["ticker"].astype(str).map(_normalize_ticker)
+    return reference.drop_duplicates("ticker")
+
+
+def add_nps_features(features: pd.DataFrame, config_path: str | Path, config: dict) -> pd.DataFrame:
+    if config.get("features", {}).get("nps", {}).get("enabled") is not True:
+        return features
+
+    data_dir = config["project"]["data_dir"]
+    nps_path = Path(config["features"]["nps"].get("path", "reports/nps/nps_holding_changes_2020_2024.csv"))
+    if not nps_path.is_absolute():
+        nps_path = project_path(config_path, str(nps_path))
+    enriched = features.copy()
+    for column in NPS_FEATURE_COLUMNS:
+        enriched[column] = 0.0
+    if not nps_path.exists():
+        return enriched
+
+    nps = pd.read_csv(nps_path)
+    nps = nps[nps["asset_class"] == "domestic"].copy()
+    if nps.empty:
+        return enriched
+    reference = _read_krx_reference(config_path, data_dir)
+    if reference.empty:
+        return enriched
+
+    domestic = reference.merge(nps, how="left", left_on="abbrv", right_on="name", suffixes=("", "_nps"))
+    missing = domestic["years_held"].isna()
+    if missing.any():
+        fallback = reference.loc[missing, ["ticker", "name"]].merge(
+            nps,
+            how="left",
+            left_on="name",
+            right_on="name",
+        )
+        for column in nps.columns:
+            domestic.loc[missing, column] = fallback[column].to_numpy()
+
+    domestic = domestic.dropna(subset=["years_held"]).copy()
+    if domestic.empty:
+        return enriched
+    domestic["ticker"] = domestic["ticker"].astype(str).map(_normalize_ticker)
+    domestic["rank_2024_num"] = pd.to_numeric(domestic["rank_2024"], errors="coerce")
+    domestic["first_year_num"] = pd.to_numeric(domestic["first_year"], errors="coerce")
+    domestic_features = pd.DataFrame(
+        {
+            "ticker": domestic["ticker"],
+            "nps_is_held_2024": domestic["rank_2024_num"].notna().astype(float),
+            "nps_years_held_5y": (pd.to_numeric(domestic["years_held"], errors="coerce") >= 5).astype(float),
+            "nps_rank_2024_score": (1.0 / domestic["rank_2024_num"]).replace([np.inf, -np.inf], np.nan).fillna(0.0),
+            "nps_weight_2024_pct": pd.to_numeric(domestic["weight_2024_pct"], errors="coerce").fillna(0.0),
+            "nps_weight_change_2020_2024_pp": pd.to_numeric(
+                domestic["weight_change_2020_2024_pp"], errors="coerce"
+            ).fillna(0.0),
+            "nps_core_top30": (
+                (pd.to_numeric(domestic["years_held"], errors="coerce") >= 5)
+                & (domestic["rank_2024_num"] <= 30)
+            ).astype(float),
+            "nps_new_leader_since_2022": (
+                (domestic["first_year_num"] >= 2022) & (domestic["rank_2024_num"] <= 80)
+            ).astype(float),
+        }
+    )
+    enriched = enriched.drop(columns=NPS_FEATURE_COLUMNS, errors="ignore").merge(
+        domestic_features,
+        how="left",
+        on="ticker",
+    )
+    enriched[NPS_FEATURE_COLUMNS] = enriched[NPS_FEATURE_COLUMNS].fillna(0.0)
+    return enriched
+
+
 def split_and_write(features: pd.DataFrame, config: dict, out_dir: Path) -> dict[str, Path]:
     train_end = pd.Timestamp(config["features"]["train_end"])
     valid_end = pd.Timestamp(config["features"]["valid_end"])
     out_dir.mkdir(parents=True, exist_ok=True)
 
     clean = clean_numeric_features(features)
-    event_columns = sorted(column for column in clean.columns if column.startswith("event_"))
-    model_columns = FEATURE_COLUMNS + event_columns
+    model_columns = feature_columns_for_config(config, clean)
     inference_clean = clean.dropna(subset=model_columns).reset_index(drop=True)
     trainable_clean = inference_clean.dropna(subset=["target_return_1d"]).reset_index(drop=True)
     splits = {
@@ -349,6 +449,7 @@ def build_features(config_path: str | Path) -> dict[str, Path]:
     features = add_price_features(prices, config["features"].get("adjusted_price_column", "adj_close"))
     features = add_market_features(features, read_index_files(index_dir))
     features = add_event_features(features, read_events(events_path))
+    features = add_nps_features(features, config_path, config)
     return split_and_write(features, config, out_dir)
 
 

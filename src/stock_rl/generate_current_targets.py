@@ -11,7 +11,7 @@ from stock_rl.config import load_config, project_path
 from stock_rl.evaluate_regime_exposure_cap import (
     RULES,
     _cap_for_row,
-    _feature_columns,
+    _feature_columns_for_model,
     _resolve_model_path,
     _target_ratio_from_action,
 )
@@ -67,7 +67,7 @@ def generate_targets(
     resolved_model_name = model_name or config["training"]["model_name"]
     model = PPO.load(_resolve_model_path(config_path, resolved_model_name))
     rule = _resolve_rule(rule_name)
-    feature_columns = _feature_columns(features)
+    feature_columns = _feature_columns_for_model(features, config, model.observation_space.shape[0])
     positions = _load_positions(positions_path)
 
     rows = []

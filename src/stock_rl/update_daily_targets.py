@@ -45,10 +45,14 @@ def infer_index_collection_starts(config_path: str | Path) -> dict[str, str]:
     config = load_config(config_path)
     latest = latest_index_date_by_market(config["project"]["data_dir"], config_path=config_path)
     starts = {}
-    for market in _config_markets(config):
+    for market in _config_index_markets(config):
         latest_date = latest.get(market)
         starts[market] = _next_day(latest_date) if latest_date else str(config["market"]["start"])
     return starts
+
+
+def _config_index_markets(config: dict) -> list[str]:
+    return [market for market in _config_markets(config) if market in {"KOSPI", "KOSDAQ"}]
 
 
 def _config_markets(config: dict) -> list[str]:
@@ -103,7 +107,8 @@ def update_daily_targets(
 ) -> dict[str, object]:
     config = load_config(config_path)
     stock_starts = {market: start for market in _config_markets(config)} if start else infer_market_collection_starts(config_path)
-    index_starts = {market: start for market in _config_markets(config)} if start else infer_index_collection_starts(config_path)
+    index_markets = _config_index_markets(config)
+    index_starts = {market: start for market in index_markets} if start else infer_index_collection_starts(config_path)
     resolved_start = start or min([*stock_starts.values(), *index_starts.values()])
     written_prices = []
     if not skip_collect:
@@ -111,7 +116,7 @@ def update_daily_targets(
     index_paths = []
     if not skip_indices:
         client = KrxOpenApiClient.from_env()
-        for market in _config_markets(config):
+        for market in index_markets:
             index_paths.append(
                 collect_index_series(
                     client,

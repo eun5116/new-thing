@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from stock_rl.build_features import FEATURE_COLUMNS
+from stock_rl.build_features import FEATURE_COLUMNS, NPS_FEATURE_COLUMNS, feature_columns_for_config
 from stock_rl.config import load_config, project_path
 from stock_rl.evaluate import performance_from_returns
 from stock_rl.trading_env import TradingEnvConfig, normalize_ticker
@@ -75,9 +75,36 @@ def _resolve_model_path(config_path: str, model_name: str) -> Path:
     raise FileNotFoundError(f"model not found: {path}")
 
 
-def _feature_columns(features: pd.DataFrame) -> list[str]:
+def _feature_columns(features: pd.DataFrame, config: dict | None = None) -> list[str]:
+    if config is not None:
+        return feature_columns_for_config(config, features)
     event_columns = sorted(column for column in features.columns if column.startswith("event_"))
     return FEATURE_COLUMNS + event_columns
+
+
+def _feature_columns_for_model(features: pd.DataFrame, config: dict, observation_size: int) -> list[str]:
+    event_columns = sorted(column for column in features.columns if column.startswith("event_"))
+    candidates = [
+        feature_columns_for_config(config),
+        feature_columns_for_config(config, features),
+        FEATURE_COLUMNS,
+        [*FEATURE_COLUMNS, *event_columns],
+        [*FEATURE_COLUMNS, *NPS_FEATURE_COLUMNS],
+        [*FEATURE_COLUMNS, *NPS_FEATURE_COLUMNS, *event_columns],
+    ]
+    seen = set()
+    for columns in candidates:
+        key = tuple(columns)
+        if key in seen:
+            continue
+        seen.add(key)
+        if len(columns) + 2 == observation_size:
+            missing = set(columns).difference(features.columns)
+            if missing:
+                raise ValueError(f"features missing model columns: {sorted(missing)}")
+            return columns
+    sizes = [len(columns) + 2 for columns in candidates]
+    raise ValueError(f"no feature column set matches model observation size {observation_size}; tried {sizes}")
 
 
 def _target_ratio_from_action(action: int, env_config: TradingEnvConfig) -> float:
@@ -235,10 +262,10 @@ def evaluate_split(config_path: str, split: str, model_name: str | None = None, 
     features = pd.read_parquet(features_path)
     features["ticker"] = features["ticker"].astype(str).map(normalize_ticker)
     features["date"] = pd.to_datetime(features["date"])
-    feature_columns = _feature_columns(features)
     env_config = TradingEnvConfig(**config["trading"])
     resolved_model_name = model_name or config["training"]["model_name"]
     model = PPO.load(_resolve_model_path(config_path, resolved_model_name))
+    feature_columns = _feature_columns_for_model(features, config, model.observation_space.shape[0])
     initial_cash = float(config["trading"].get("initial_cash", 1_000_000.0))
     transaction_cost_pct = float(config["trading"].get("transaction_cost_pct", 0.001))
     output_dir = Path(out_dir) if out_dir else project_path(config_path, "reports")

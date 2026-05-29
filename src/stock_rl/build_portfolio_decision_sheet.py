@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from stock_rl.build_trading_sheet import _markdown_table
-from stock_rl.config import project_path
+from stock_rl.config import load_config, project_path
 from stock_rl.report_png import render_decision_sheet_png
 
 
@@ -136,11 +136,12 @@ def build_decision_sheet(
     png_path = output_dir / f"portfolio_decision_sheet_{as_of}.png"
     frame.to_csv(csv_path, index=False)
     render_decision_sheet_png(frame, png_path)
-    _write_markdown(md_path, frame, position_path, rebalance_path)
+    model_name = str(load_config(config_path).get("training", {}).get("model_name", "configured model"))
+    _write_markdown(md_path, frame, position_path, rebalance_path, model_name)
     return {"csv": csv_path, "markdown": md_path, "png": png_path}
 
 
-def _write_markdown(path: Path, frame: pd.DataFrame, position_path: Path, rebalance_path: Path) -> None:
+def _write_markdown(path: Path, frame: pd.DataFrame, position_path: Path, rebalance_path: Path, model_name: str) -> None:
     lines = [
         "# Portfolio Decision Sheet",
         "",
@@ -160,7 +161,7 @@ def _write_markdown(path: Path, frame: pd.DataFrame, position_path: Path, rebala
         "## Notes",
         "",
         "- Decisions are rule-based labels, not automatic orders.",
-        "- E032 target applies only to the 48-stock KRX model universe.",
+        f"- `{model_name}` target applies only to its configured model universe.",
         "- US/global and ETF assets are evaluated by trend/risk rules only.",
         "",
     ]

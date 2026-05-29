@@ -7,7 +7,7 @@ import pandas as pd
 
 from stock_rl.build_features import add_price_features
 from stock_rl.build_trading_sheet import _load_reference, _markdown_table
-from stock_rl.config import project_path
+from stock_rl.config import load_config, project_path
 from stock_rl.collect_prices import fetch_yfinance
 from stock_rl.krx_openapi import KrxOpenApiClient, fetch_stock_prices
 from stock_rl.positions import load_positions
@@ -216,6 +216,12 @@ def analyze_positions(
         collect_held_us_prices(config_path, positions, start=us_start)
     positions = load_positions(positions_path, config_path)
     targets = _load_targets(config_path, rule)
+    config = load_config(config_path)
+    model_name = (
+        str(targets["model_name"].dropna().iloc[0])
+        if "model_name" in targets.columns and not targets["model_name"].dropna().empty
+        else str(config.get("training", {}).get("model_name", "configured model"))
+    )
     reference = _krx_reference_map(config_path)
     krx_features = _load_position_price_features(config_path)
 
@@ -260,7 +266,7 @@ def analyze_positions(
                 "volatility_20d_pct": round(float(feature_row.get("volatility_20d", 0.0)) * 100.0, 2) if feature_row is not None else None,
                 "drawdown_60d_pct": round(float(feature_row.get("drawdown_60d", 0.0)) * 100.0, 2) if feature_row is not None else None,
                 "feature_date": str(pd.to_datetime(feature_row.get("date")).date()) if feature_row is not None else "",
-                "note": _note_for_position(ticker, model_universe, reference_tickers),
+                "note": _note_for_position(ticker, model_universe, reference_tickers, model_name),
             }
         )
 
@@ -273,13 +279,13 @@ def analyze_positions(
     png_path = output_dir / f"current_position_analysis_{as_of}.png"
     result.to_csv(csv_path, index=False)
     render_position_analysis_png(result, png_path)
-    _write_markdown(md_path, result, positions_path, total_value)
+    _write_markdown(md_path, result, positions_path, total_value, model_name)
     return {"csv": csv_path, "markdown": md_path, "png": png_path}
 
 
-def _note_for_position(ticker: str, model_universe: set[str], reference_tickers: set[str]) -> str:
+def _note_for_position(ticker: str, model_universe: set[str], reference_tickers: set[str], model_name: str) -> str:
     if ticker in model_universe:
-        return "E032 target available"
+        return f"{model_name} target available"
     if ticker in reference_tickers:
         return "KRX stock; trend analysis only"
     if str(ticker).isdigit():
@@ -287,7 +293,7 @@ def _note_for_position(ticker: str, model_universe: set[str], reference_tickers:
     return "US/global asset; model target unavailable"
 
 
-def _write_markdown(path: Path, frame: pd.DataFrame, positions_path: str, total_value: float) -> None:
+def _write_markdown(path: Path, frame: pd.DataFrame, positions_path: str, total_value: float, model_name: str) -> None:
     lines = [
         "# Current Position Analysis",
         "",
@@ -361,7 +367,7 @@ def _write_markdown(path: Path, frame: pd.DataFrame, positions_path: str, total_
         "",
         "## Note",
         "",
-        "Only tickers in the 48-stock model universe receive E032 target ratios. KRX stocks outside the model universe and US/global assets use trend analysis only. KRX ETFs are currently marked as unavailable unless a separate ETF price source is added.",
+        f"Only tickers in the `{model_name}` universe receive model target ratios. KRX stocks outside the model universe and US/global assets use trend analysis only.",
         "",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
