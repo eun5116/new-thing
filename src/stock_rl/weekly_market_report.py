@@ -59,6 +59,20 @@ ALERT_COLUMNS = [
     "signal",
     "triggered",
 ]
+VALUE_WATCHLIST_LABELS = {
+    "market": "시장",
+    "symbol": "종목코드",
+    "name": "종목명",
+    "latest_weekly_change_pct": "최근 1주 등락률(%)",
+    "four_week_return_pct": "최근 4주 수익률(%)",
+    "relative_gap_pct": "시장 대비 4주 격차(%p)",
+    "discount_from_8w_high_pct": "8주 고점 대비 할인율(%)",
+    "momentum_triggered": "모멘텀 신호",
+    "target_pct": "모델 목표비중(%)",
+    "watch_score": "관심 점수",
+    "bucket": "분류",
+    "decision_hint": "판단 메모",
+}
 DEFAULT_KOSPI20 = [
     ("삼성전자", "005930"),
     ("SK하이닉스", "000660"),
@@ -226,6 +240,191 @@ def _build_summary_sections(kospi_df, kospi_status, sp_df, alert_results, alert_
         "<h3>Weekly Summary</h3>\n<ul>" + summary_html + "</ul>",
         "Weekly Summary:\n" + "\n".join(f"- {line}" for line in summary_lines),
     )
+
+
+def _build_value_watchlist_sections(watchlist_df, watchlist_paths=None):
+    if watchlist_df is None or watchlist_df.empty:
+        return "", "", {}
+    watch = watchlist_df.copy()
+    watch["decision_hint"] = watch.apply(_value_watch_decision_hint, axis=1)
+    display_columns = [
+        "market",
+        "symbol",
+        "name",
+        "latest_weekly_change_pct",
+        "four_week_return_pct",
+        "relative_gap_pct",
+        "discount_from_8w_high_pct",
+        "momentum_triggered",
+        "target_pct",
+        "watch_score",
+        "bucket",
+        "decision_hint",
+    ]
+    available_columns = [column for column in display_columns if column in watch.columns]
+    actionable_buckets = {"early_value_recovery", "model_supported_laggard", "momentum_turnaround"}
+    actionable = watch[watch["bucket"].isin(actionable_buckets)].copy() if "bucket" in watch.columns else watch.head(10)
+    falling = watch[watch["bucket"].eq("falling_knife")].copy() if "bucket" in watch.columns else pd.DataFrame()
+    us_watch = watch[watch["market"].eq("SP500")].copy() if "market" in watch.columns else pd.DataFrame()
+    quick_trade = _watchlist_category(watch, "quick_trade")
+    accumulation = _watchlist_category(watch, "accumulation")
+    wait_for_signal = _watchlist_category(watch, "wait_for_signal")
+    avoid = _watchlist_category(watch, "avoid")
+    top_picks = pd.concat([quick_trade, accumulation, wait_for_signal], ignore_index=True).head(3)
+
+    path_lines = []
+    path_items = {}
+    for label, path in (watchlist_paths or {}).items():
+        path_items[f"value_watchlist_{label}_path"] = str(path)
+        path_lines.append(f"{label}: {path}")
+
+    html_parts = [
+        "<h3>Weekly Value Watchlist</h3>",
+        "<p>가격/모멘텀 히스토리로 최근 고점 대비 할인, 4주 상대 부진, 회복 신호, KRX RL target을 함께 본 감시 리스트입니다.</p>",
+        "<h4>이번 주 핵심 후보 3개</h4>",
+        _to_html_table(_display_value_watchlist(top_picks, available_columns, 3), "No priority candidates."),
+        "<h4>짧게 볼 단기 트레이딩 후보</h4>",
+        _to_html_table(_display_value_watchlist(quick_trade, available_columns, 8), "No short-term trading candidates."),
+        "<h4>분할 관찰 후보</h4>",
+        _to_html_table(_display_value_watchlist(accumulation, available_columns, 8), "No accumulation candidates."),
+        "<h4>반등 확인이 필요한 관찰 후보</h4>",
+        _to_html_table(_display_value_watchlist(wait_for_signal, available_columns, 8), "No wait-for-signal candidates."),
+        "<h4>미국 주식 후보</h4>",
+        _to_html_table(_display_value_watchlist(us_watch, available_columns, 10), "No U.S. watchlist candidates."),
+    ]
+    if not avoid.empty:
+        html_parts.extend(
+            [
+                "<h4>매수 보류 / 낙폭 주의</h4>",
+                _to_html_table(_display_value_watchlist(avoid, available_columns, 10), "No avoid rows."),
+            ]
+        )
+
+    text_parts = [
+        "\n\nWeekly Value Watchlist:\n",
+        "가격/모멘텀 히스토리로 최근 고점 대비 할인, 4주 상대 부진, 회복 신호, KRX RL target을 함께 본 감시 리스트입니다.",
+    ]
+    if path_lines:
+        text_parts.append("\n" + "\n".join(path_lines))
+    text_parts.append("\n\n이번 주 핵심 후보 3개:\n")
+    text_parts.append(_to_text_table(_display_value_watchlist(top_picks, available_columns, 3), "No priority candidates."))
+    text_parts.append("\n\n짧게 볼 단기 트레이딩 후보:\n")
+    text_parts.append(_to_text_table(_display_value_watchlist(quick_trade, available_columns, 8), "No short-term trading candidates."))
+    text_parts.append("\n\n분할 관찰 후보:\n")
+    text_parts.append(_to_text_table(_display_value_watchlist(accumulation, available_columns, 8), "No accumulation candidates."))
+    text_parts.append("\n\n반등 확인이 필요한 관찰 후보:\n")
+    text_parts.append(_to_text_table(_display_value_watchlist(wait_for_signal, available_columns, 8), "No wait-for-signal candidates."))
+    text_parts.append("\n\n미국 주식 후보:\n")
+    text_parts.append(_to_text_table(_display_value_watchlist(us_watch, available_columns, 10), "No U.S. watchlist candidates."))
+    if not avoid.empty:
+        text_parts.append("\n\n매수 보류 / 낙폭 주의:\n")
+        text_parts.append(_to_text_table(_display_value_watchlist(avoid, available_columns, 10), "No avoid rows."))
+    return "\n".join(html_parts), "".join(text_parts), path_items
+
+
+def _watchlist_category(watch, category):
+    if watch is None or watch.empty or "bucket" not in watch.columns:
+        return pd.DataFrame()
+    frame = watch.copy()
+    if category == "quick_trade":
+        mask = frame["bucket"].eq("momentum_turnaround")
+        mask |= (
+            frame["bucket"].eq("watch_only")
+            & (pd.to_numeric(frame.get("latest_weekly_change_pct"), errors="coerce") >= 12.0)
+            & (pd.to_numeric(frame.get("four_week_return_pct"), errors="coerce") > 0.0)
+        )
+    elif category == "accumulation":
+        mask = frame["bucket"].isin(["early_value_recovery", "model_supported_laggard"])
+    elif category == "wait_for_signal":
+        mask = frame["bucket"].eq("watch_only") & (
+            (pd.to_numeric(frame.get("relative_gap_pct"), errors="coerce") <= -8.0)
+            | (pd.to_numeric(frame.get("discount_from_8w_high_pct"), errors="coerce") <= -5.0)
+        )
+    elif category == "avoid":
+        mask = frame["bucket"].eq("falling_knife")
+    else:
+        mask = pd.Series(False, index=frame.index)
+    return frame[mask].sort_values("watch_score", ascending=False)
+
+
+def _display_value_watchlist(frame, columns, limit):
+    if frame is None or frame.empty:
+        return pd.DataFrame()
+    display = frame[[column for column in columns if column in frame.columns]].head(limit).copy()
+    return display.rename(columns=VALUE_WATCHLIST_LABELS)
+
+
+def _value_watch_decision_hint(row):
+    bucket = str(row.get("bucket", ""))
+    latest = float(row.get("latest_weekly_change_pct", 0.0) or 0.0)
+    four_week = float(row.get("four_week_return_pct", 0.0) or 0.0)
+    relative_gap = float(row.get("relative_gap_pct", 0.0) or 0.0)
+    discount = float(row.get("discount_from_8w_high_pct", 0.0) or 0.0)
+    if bucket == "falling_knife":
+        return "매수 보류. 낙폭은 크지만 반등 확인 전에는 손실 확대 위험이 큼"
+    if bucket == "momentum_turnaround":
+        return "단기 회복 모멘텀 후보. 짧은 손절 기준을 두고 트레이딩 관점으로 볼 만함"
+    if bucket == "early_value_recovery":
+        return "분할 관찰 후보. 가격 매력과 회복 신호가 같이 보이면 소액 접근"
+    if bucket == "model_supported_laggard":
+        return "모델 지지 낙폭 후보. 단기보다 1-4주 분할 관찰에 가까움"
+    if latest >= 12.0 and four_week > 0.0:
+        return "강한 단기 추세 후보. 추격매수보다 눌림/손절선 전제로 짧게 접근"
+    if relative_gap <= -8.0 and discount <= -5.0:
+        return "싸 보이는 관찰 후보. 아직 매수 신호는 약해 반등 확인 필요"
+    return "관찰만. 매수 근거가 충분하지 않음"
+
+
+def _fallback_watchlist_for_alert_section(section_title, value_watchlist_df, limit=5):
+    if value_watchlist_df is None or value_watchlist_df.empty:
+        return pd.DataFrame()
+    watch = value_watchlist_df.copy()
+    if "decision_hint" not in watch.columns:
+        watch["decision_hint"] = watch.apply(_value_watch_decision_hint, axis=1)
+    title = str(section_title).lower()
+    if "sp500" in title or "s&p" in title or "us" in title:
+        market = "SP500"
+    elif "kospi" in title:
+        market = "KOSPI"
+    else:
+        market = ""
+    if market and "market" in watch.columns:
+        watch = watch[watch["market"].astype(str).str.upper().eq(market)]
+    if watch.empty:
+        return pd.DataFrame()
+    priority = {
+        "momentum_turnaround": 0,
+        "early_value_recovery": 1,
+        "model_supported_laggard": 2,
+        "watch_only": 3,
+        "falling_knife": 9,
+    }
+    watch["_bucket_priority"] = watch["bucket"].map(priority).fillna(5) if "bucket" in watch.columns else 5
+    watch = watch.sort_values(["_bucket_priority", "watch_score"], ascending=[True, False])
+    columns = [
+        "market",
+        "symbol",
+        "name",
+        "latest_weekly_change_pct",
+        "four_week_return_pct",
+        "relative_gap_pct",
+        "discount_from_8w_high_pct",
+        "watch_score",
+        "bucket",
+        "decision_hint",
+    ]
+    return _display_value_watchlist(watch, columns, limit)
+
+
+def build_value_watchlist_for_report():
+    try:
+        from stock_rl.build_weekly_value_watchlist import build_weekly_value_watchlist
+
+        paths = build_weekly_value_watchlist()
+        watch = pd.read_csv(paths["csv"], dtype={"symbol": str})
+        return watch, paths, ""
+    except Exception as exc:
+        return pd.DataFrame(), {}, str(exc)
 
 
 def _parse_simple_yaml_scalar(raw):
@@ -1238,7 +1437,17 @@ def collect_report_inputs():
     return kospi_df, kospi_status, sp_df, alert_results, alert_statuses
 
 
-def render_report(kospi_df, kospi_status, sp_df, alert_results, alert_statuses, report_date=None):
+def render_report(
+    kospi_df,
+    kospi_status,
+    sp_df,
+    alert_results,
+    alert_statuses,
+    report_date=None,
+    value_watchlist_df=None,
+    value_watchlist_paths=None,
+    value_watchlist_error="",
+):
     now = report_date or dt.datetime.now().strftime("%Y-%m-%d")
     subject = f"Weekly Market Report - {now}"
     kospi_notice_html = ""
@@ -1248,6 +1457,16 @@ def render_report(kospi_df, kospi_status, sp_df, alert_results, alert_statuses, 
     summary_html, summary_text = _build_summary_sections(
         kospi_df, kospi_status, sp_df, alert_results, alert_statuses
     )
+    value_watchlist_html, value_watchlist_text, _ = _build_value_watchlist_sections(
+        value_watchlist_df,
+        value_watchlist_paths,
+    )
+    if value_watchlist_error:
+        value_watchlist_html = (
+            "<h3>Weekly Value Watchlist</h3>"
+            f"<p><strong>Value watchlist unavailable:</strong> {value_watchlist_error}</p>"
+        )
+        value_watchlist_text = f"\n\nWeekly Value Watchlist:\nUnavailable: {value_watchlist_error}"
     if kospi_df.empty and not kospi_status:
         kospi_notice_html = (
             "<p><strong>KOSPI data is unavailable.</strong> "
@@ -1273,8 +1492,20 @@ def render_report(kospi_df, kospi_status, sp_df, alert_results, alert_statuses, 
         section_notice_text = ""
         candidate_alerts_df = pd.DataFrame(columns=ALERT_COLUMNS)
         if section_status:
-            section_notice_html = f"<p><strong>Momentum notice:</strong> {section_status}</p>"
-            section_notice_text = f"[Momentum] {section_status}\n"
+            fallback_df = _fallback_watchlist_for_alert_section(section_title, value_watchlist_df)
+            if fallback_df.empty:
+                section_notice_html = f"<p><strong>Momentum notice:</strong> {section_status}</p>"
+                section_notice_text = f"[Momentum] {section_status}\n"
+            else:
+                section_notice_html = (
+                    f"<p><strong>Momentum notice:</strong> {section_status}</p>"
+                    "<p>이번 실행에서 2주 모멘텀 가격 데이터는 비었지만, 아래는 value watchlist 기준으로 바로 볼 후보입니다.</p>"
+                )
+                section_notice_text = (
+                    f"[Momentum] {section_status}\n"
+                    "2주 모멘텀 가격 데이터는 비었지만, 아래는 value watchlist 기준으로 바로 볼 후보입니다.\n"
+                )
+                candidate_alerts_df = fallback_df
         elif triggered_alerts_df.empty:
             candidate_alerts_df = _build_momentum_candidate_rows(alerts_df)
             section_notice = _build_momentum_notice(config_path, candidate_alerts_df)
@@ -1304,6 +1535,7 @@ def render_report(kospi_df, kospi_status, sp_df, alert_results, alert_statuses, 
     {kospi_html}
     <h3>S&P 500 Top 20 by Market Cap</h3>
     {sp_html}
+    {value_watchlist_html}
     {''.join(alert_sections_html)}
     </body>
     </html>
@@ -1315,6 +1547,7 @@ def render_report(kospi_df, kospi_status, sp_df, alert_results, alert_statuses, 
     text += _to_text_table(kospi_df, "No KOSPI rows available.")
     text += "\n\nS&P 500 Top 20:\n"
     text += _to_text_table(sp_df, "No S&P 500 rows available.")
+    text += value_watchlist_text
     text += "".join(alert_sections_text)
     return subject, text, html
 
@@ -1362,6 +1595,11 @@ def parse_args(argv=None):
         action="store_true",
         help="Skip live network fetches and build the report from cached data only.",
     )
+    parser.add_argument(
+        "--report-date",
+        default=None,
+        help="Override the report date label, for example 2026-05-29.",
+    )
     return parser.parse_args(argv)
 
 
@@ -1370,8 +1608,9 @@ def main(argv=None):
     output_dir = Path(args.output_dir).expanduser()
     set_offline_mode(args.offline)
     kospi_df, kospi_status, sp_df, alert_results, alert_statuses = collect_report_inputs()
-    report_date = dt.datetime.now().strftime("%Y-%m-%d")
+    report_date = args.report_date or dt.datetime.now().strftime("%Y-%m-%d")
     history_paths = save_market_history(report_date, kospi_df, sp_df, alert_results)
+    value_watchlist_df, value_watchlist_paths, value_watchlist_error = build_value_watchlist_for_report()
     subject, text, html = render_report(
         kospi_df,
         kospi_status,
@@ -1379,7 +1618,22 @@ def main(argv=None):
         alert_results,
         alert_statuses,
         report_date=report_date,
+        value_watchlist_df=value_watchlist_df,
+        value_watchlist_paths=value_watchlist_paths,
+        value_watchlist_error=value_watchlist_error,
     )
+    value_watchlist_metadata = {
+        f"value_watchlist_{label}_path": str(path)
+        for label, path in value_watchlist_paths.items()
+    }
+    report_metadata = {
+        "history_kospi_path": str(history_paths["kospi"]),
+        "history_sp500_path": str(history_paths["sp500"]),
+        "history_alerts_path": str(history_paths["alerts"]),
+        **value_watchlist_metadata,
+    }
+    if value_watchlist_error:
+        report_metadata["value_watchlist_error"] = value_watchlist_error
     if args.dry_run:
         artifacts = save_report_artifacts(
             subject,
@@ -1388,9 +1642,7 @@ def main(argv=None):
             output_dir=output_dir,
             metadata={
                 "delivery_status": "dry_run",
-                "history_kospi_path": str(history_paths["kospi"]),
-                "history_sp500_path": str(history_paths["sp500"]),
-                "history_alerts_path": str(history_paths["alerts"]),
+                **report_metadata,
             },
         )
         print(f"Dry run complete: {artifacts['html']}")
@@ -1403,9 +1655,7 @@ def main(argv=None):
         output_dir=output_dir,
         metadata={
             "delivery_status": "pending_send",
-            "history_kospi_path": str(history_paths["kospi"]),
-            "history_sp500_path": str(history_paths["sp500"]),
-            "history_alerts_path": str(history_paths["alerts"]),
+            **report_metadata,
         },
     )
 
