@@ -63,5 +63,13 @@ ticker_groups:
   QUBT: us_speculative
   "379800": etf_core
   "379810": etf_core
+  "0091C0": etf_core
+  "449190": etf_core
+  "458730": etf_core
   "381170": etf_theme
   "469070": etf_theme
+  "497570": etf_theme
+  "0167Z0": etf_theme
+  "475720": etf_theme
+  "229200": etf_theme
+  "478150": etf_theme

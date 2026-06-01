@@ -149,7 +149,12 @@ def collect_held_us_prices(
     start: str = "2025-01-01",
     end: str | None = None,
 ) -> list[Path]:
-    tickers = sorted(str(ticker) for ticker in positions["ticker"] if not str(ticker).isdigit())
+    if "currency" in positions.columns:
+        mask = positions["currency"].astype(str).str.upper().ne("KRW")
+        universe = positions.loc[mask, "ticker"]
+    else:
+        universe = positions["ticker"]
+    tickers = sorted(str(ticker) for ticker in universe if not str(ticker).isdigit())
     if not tickers:
         return []
     out_dir = project_path(config_path, "data_krx", "raw", "position_prices_us")
@@ -181,12 +186,12 @@ def _load_position_price_features(config_path: str) -> pd.DataFrame:
     return features.groupby("ticker", as_index=False).tail(1)
 
 
-def _asset_scope(ticker: str, model_universe: set[str], reference_tickers: set[str]) -> str:
+def _asset_scope(ticker: str, model_universe: set[str], reference_tickers: set[str], currency: str = "") -> str:
     if ticker in model_universe:
         return "model_universe"
     if ticker in reference_tickers:
         return "krx_stock_outside_model"
-    if str(ticker).isdigit():
+    if str(ticker).isdigit() or currency.upper() == "KRW":
         return "krx_etf_or_unmapped"
     return "us_or_global"
 
@@ -247,7 +252,7 @@ def analyze_positions(
             {
                 "ticker": ticker,
                 "name": position["name"],
-                "asset_scope": _asset_scope(ticker, model_universe, reference_tickers),
+                "asset_scope": _asset_scope(ticker, model_universe, reference_tickers, str(position.get("currency", ""))),
                 "reference_name": str(ref_row.get("name", "")) if ref_row is not None else "",
                 "market": str(ref_row.get("market", "")) if ref_row is not None else "",
                 "quantity": float(position["quantity"]),
@@ -266,7 +271,13 @@ def analyze_positions(
                 "volatility_20d_pct": round(float(feature_row.get("volatility_20d", 0.0)) * 100.0, 2) if feature_row is not None else None,
                 "drawdown_60d_pct": round(float(feature_row.get("drawdown_60d", 0.0)) * 100.0, 2) if feature_row is not None else None,
                 "feature_date": str(pd.to_datetime(feature_row.get("date")).date()) if feature_row is not None else "",
-                "note": _note_for_position(ticker, model_universe, reference_tickers, model_name),
+                "note": _note_for_position(
+                    ticker,
+                    model_universe,
+                    reference_tickers,
+                    model_name,
+                    str(position.get("currency", "")),
+                ),
             }
         )
 
@@ -283,12 +294,12 @@ def analyze_positions(
     return {"csv": csv_path, "markdown": md_path, "png": png_path}
 
 
-def _note_for_position(ticker: str, model_universe: set[str], reference_tickers: set[str], model_name: str) -> str:
+def _note_for_position(ticker: str, model_universe: set[str], reference_tickers: set[str], model_name: str, currency: str = "") -> str:
     if ticker in model_universe:
         return f"{model_name} target available"
     if ticker in reference_tickers:
         return "KRX stock; trend analysis only"
-    if str(ticker).isdigit():
+    if str(ticker).isdigit() or currency.upper() == "KRW":
         return "KRX ETF/unmapped; model target unavailable"
     return "US/global asset; model target unavailable"
 

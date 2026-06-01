@@ -1,0 +1,246 @@
+[2026-06-02T00:47:46+09:00] weekly market email start
+KRX KOSDAQ 1/2 20260601 rows=0
+KRX KOSDAQ 2/2 20260602 rows=0
+KRX KOSDAQ: no new rows for 2026-05-30..today
+KRX KOSPI 1/2 20260601 rows=0
+KRX KOSPI 2/2 20260602 rows=0
+KRX KOSPI: no new rows for 2026-05-30..today
+KRX KOSDAQ index 1/2 20260601 rows=0
+KRX KOSDAQ index 2/2 20260602 rows=0
+KOSDAQ indices 2026-05-30..today: no new rows, keeping /home/jack/stock_rl_project/data_krx/raw/indices/kosdaq_indices.parquet
+KRX KOSPI index 1/2 20260601 rows=0
+KRX KOSPI index 2/2 20260602 rows=0
+KOSPI indices 2026-05-30..today: no new rows, keeping /home/jack/stock_rl_project/data_krx/raw/indices/kospi_indices.parquet
+collection: 2026-05-30..today
+stock_starts: KOSDAQ=2026-05-30 KOSPI=2026-05-30
+index_starts: KOSDAQ=2026-05-30 KOSPI=2026-05-30
+price_files: 48
+index_files: 2
+index_latest: KOSDAQ=2026-05-29 KOSPI=2026-05-29
+target: /home/jack/stock_rl_project/reports/current_targets_20260529_strong_trend_full_else070.csv
+sheet_csv: /home/jack/stock_rl_project/reports/trading_sheet_20260529_strong_trend_full_else070.csv
+sheet_markdown: /home/jack/stock_rl_project/reports/trading_sheet_20260529_strong_trend_full_else070.md
+sheet_png: /home/jack/stock_rl_project/reports/trading_sheet_20260529_strong_trend_full_else070.png
+changes_csv: /home/jack/stock_rl_project/reports/target_changes_20260529_strong_trend_full_else070.csv
+changes_markdown: /home/jack/stock_rl_project/reports/target_changes_20260529_strong_trend_full_else070.md
+changes_png: /home/jack/stock_rl_project/reports/target_changes_20260529_strong_trend_full_else070.png
+summary: as_of=2026-05-29 tickers=48 avg_target=73.8% full=0 capped=38 stale=0 max_lag=0d
+
+1 Failed download:
+['005930.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['000660.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['373220.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['207940.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['005380.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['068270.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['035420.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['005935.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['000270.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['105560.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['055550.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['005490.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['006400.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['012330.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['051910.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['028260.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['096770.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['015760.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['066570.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['017670.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+20 Failed downloads:
+['NVDA', 'AAPL', 'V', 'AMZN', 'GOOG', 'INTC', 'GOOGL', 'BRK-B', 'JNJ', 'WMT', 'MSFT', 'MU', 'JPM', 'LLY', 'TSLA', 'ORCL', 'XOM', 'AMD', 'META', 'AVGO']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['NVDA']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['GOOGL']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['GOOG']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['AAPL']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['MSFT']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['AMZN']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['AVGO']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['TSLA']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['META']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['BRK-B']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['WMT']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['LLY']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['MU']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['JPM']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['AMD']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['XOM']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['V']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['INTC']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['JNJ']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['ORCL']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+20 Failed downloads:
+['066570.KS', '005380.KS', '006400.KS', '034730.KS', '000270.KS', '402340.KS', '009150.KS', '005935.KS', '373220.KS', '032830.KS', '329180.KS', '207940.KS', '000660.KS', '028260.KS', '034020.KS', '055550.KS', '012450.KS', '012330.KS', '105560.KS', '005930.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['005930.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['000660.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['005935.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['402340.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['009150.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['005380.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['373220.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['032830.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['329180.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['028260.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['012330.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['034020.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['000270.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['207940.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['012450.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['105560.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['006400.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['034730.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['066570.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+
+1 Failed download:
+['055550.KS']: DNSError('Failed to perform, curl: (6) Could not resolve host: query1.finance.yahoo.com. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.')
+Email send failed. Saved report locally: /home/jack/stock_rl_project/reports/weekly_market/20260602_004854_Weekly_Market_Report_-_2026-06-02.html
+ERROR: [Errno -3] Temporary failure in name resolution
+[2026-06-02T00:49:27+09:00] weekly market email start
+KRX KOSDAQ 1/2 20260601 rows=0
+KRX KOSDAQ 2/2 20260602 rows=0
+KRX KOSDAQ: no new rows for 2026-05-30..today
+KRX KOSPI 1/2 20260601 rows=0
+KRX KOSPI 2/2 20260602 rows=0
+KRX KOSPI: no new rows for 2026-05-30..today
+KRX KOSDAQ index 1/2 20260601 rows=0
+KRX KOSDAQ index 2/2 20260602 rows=0
+KOSDAQ indices 2026-05-30..today: no new rows, keeping /home/jack/stock_rl_project/data_krx/raw/indices/kosdaq_indices.parquet
+KRX KOSPI index 1/2 20260601 rows=0
+KRX KOSPI index 2/2 20260602 rows=0
+KOSPI indices 2026-05-30..today: no new rows, keeping /home/jack/stock_rl_project/data_krx/raw/indices/kospi_indices.parquet
+collection: 2026-05-30..today
+stock_starts: KOSDAQ=2026-05-30 KOSPI=2026-05-30
+index_starts: KOSDAQ=2026-05-30 KOSPI=2026-05-30
+price_files: 48
+index_files: 2
+index_latest: KOSDAQ=2026-05-29 KOSPI=2026-05-29
+target: /home/jack/stock_rl_project/reports/current_targets_20260529_strong_trend_full_else070.csv
+sheet_csv: /home/jack/stock_rl_project/reports/trading_sheet_20260529_strong_trend_full_else070.csv
+sheet_markdown: /home/jack/stock_rl_project/reports/trading_sheet_20260529_strong_trend_full_else070.md
+sheet_png: /home/jack/stock_rl_project/reports/trading_sheet_20260529_strong_trend_full_else070.png
+changes_csv: /home/jack/stock_rl_project/reports/target_changes_20260529_strong_trend_full_else070.csv
+changes_markdown: /home/jack/stock_rl_project/reports/target_changes_20260529_strong_trend_full_else070.md
+changes_png: /home/jack/stock_rl_project/reports/target_changes_20260529_strong_trend_full_else070.png
+summary: as_of=2026-05-29 tickers=48 avg_target=73.8% full=0 capped=38 stale=0 max_lag=0d
+Email sent: Weekly Market Report - 2026-06-02
+Saved report locally: /home/jack/stock_rl_project/reports/weekly_market/20260602_005453_Weekly_Market_Report_-_2026-06-02.html
+Attached PDF: /home/jack/stock_rl_project/reports/weekly_market/20260602_005453_Weekly_Market_Report_-_2026-06-02.pdf
+[2026-06-02T00:54:58+09:00] weekly market email done
